@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="DiscoTrack.Core.Tests/DiscoTrack.Core.Tests.csproj" />
+  <Project Path="DiscoTrack.Core/DiscoTrack.Core.csproj" />
+</Solution>
