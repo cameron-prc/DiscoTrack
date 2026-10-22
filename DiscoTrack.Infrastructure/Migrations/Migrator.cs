@@ -5,12 +5,14 @@ namespace DiscoTrack.Infrastructure.Migrations;
 
 public static class Migrator
 {
-	public static void Migrate(string connectionString)
+	public static IReadOnlyList<string> Migrate(string connectionString)
 	{
 		var result = Build(connectionString).PerformUpgrade();
 
 		if (!result.Successful)
 			throw new InvalidOperationException($"Migration '{result.ErrorScript?.Name}' failed.", result.Error);
+
+		return result.Scripts.Select(s => s.Name).ToList();
 	}
 
 	public static bool IsUpToDate(string connectionString)
