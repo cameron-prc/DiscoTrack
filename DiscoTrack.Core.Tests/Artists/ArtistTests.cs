@@ -1,6 +1,7 @@
-using DiscoTrack.Core.Models;
+using DiscoTrack.Core.Albums;
+using DiscoTrack.Core.Artists;
 
-namespace DiscoTrack.Core.Tests.Models;
+namespace DiscoTrack.Core.Tests.Artists;
 
 public class ArtistTests
 {

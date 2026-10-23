@@ -1,4 +1,6 @@
-namespace DiscoTrack.Core.Models;
+using DiscoTrack.Core.Albums;
+
+namespace DiscoTrack.Core.Artists;
 
 public abstract class Artist
 {
