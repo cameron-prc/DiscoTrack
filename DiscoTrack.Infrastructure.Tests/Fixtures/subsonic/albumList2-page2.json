@@ -1,0 +1,35 @@
+{
+ "subsonic-response": {
+  "status": "ok",
+  "version": "1.16.1",
+  "type": "navidrome",
+  "serverVersion": "0.64.2",
+  "openSubsonic": true,
+  "albumList2": {
+   "album": [
+    {
+     "id": "68b8oK10iWRrgxqnZ6AKh4",
+     "name": "Hypnotize",
+     "artist": "System of a Down",
+     "artistId": "3iEzJ4wYdWOaFHgMcwfnLW",
+     "songCount": 12,
+     "duration": 2386,
+     "year": 2005,
+     "genre": "Alternative",
+     "musicBrainzId": "47ae093f-1607-49a3-be11-a15d335ccc94",
+     "isCompilation": false,
+     "releaseTypes": [
+      "album"
+     ],
+     "artists": [
+      {
+       "id": "3iEzJ4wYdWOaFHgMcwfnLW",
+       "name": "System of a Down"
+      }
+     ],
+     "displayArtist": "System of a Down"
+    }
+   ]
+  }
+ }
+}

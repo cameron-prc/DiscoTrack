@@ -1,0 +1,95 @@
+{
+ "subsonic-response": {
+  "status": "ok",
+  "version": "1.16.1",
+  "type": "navidrome",
+  "serverVersion": "0.64.2",
+  "openSubsonic": true,
+  "albumList2": {
+   "album": [
+    {
+     "id": "0dDPXvLdkMhRdU88PSPiSy",
+     "name": "Nightmare",
+     "artist": "Avenged Sevenfold",
+     "artistId": "0HodC6aFEmLZ8bNs0R7UjV",
+     "songCount": 12,
+     "duration": 4265,
+     "year": 2010,
+     "genre": "Heavy metal",
+     "musicBrainzId": "3736e21d-c00c-4b11-bdd5-8e2e1e3ee967",
+     "isCompilation": false,
+     "releaseTypes": [
+      "album"
+     ],
+     "artists": [
+      {
+       "id": "0HodC6aFEmLZ8bNs0R7UjV",
+       "name": "Avenged Sevenfold"
+      }
+     ],
+     "displayArtist": "Avenged Sevenfold"
+    },
+    {
+     "id": "6NhcvrbascKsO9WepfYLYD",
+     "name": "Salival",
+     "artist": "Tool",
+     "artistId": "3LZNqFXV2xMsnuH7Iel2FT",
+     "songCount": 8,
+     "duration": 4426,
+     "year": 2000,
+     "genre": "Progressive Metal",
+     "musicBrainzId": "1604ec19-a863-41be-a9d6-4bda604a95a2",
+     "isCompilation": false,
+     "releaseTypes": [
+      "album",
+      "compilation",
+      "live"
+     ],
+     "artists": [
+      {
+       "id": "3LZNqFXV2xMsnuH7Iel2FT",
+       "name": "Tool"
+      }
+     ],
+     "displayArtist": "Tool"
+    },
+    {
+     "id": "7d4hap8bMFOHPduaTvwlk4",
+     "name": "Conditions of My Parole",
+     "artist": "Puscifer",
+     "artistId": "3BCOoHVnn287SKIxXFdoZy",
+     "songCount": 12,
+     "duration": 3113,
+     "genre": "Alternative rock",
+     "musicBrainzId": "d8566ff5-91a6-41c9-9904-f68ab6a1932a",
+     "isCompilation": false,
+     "releaseTypes": [
+      "album"
+     ],
+     "artists": [
+      {
+       "id": "3BCOoHVnn287SKIxXFdoZy",
+       "name": "Puscifer"
+      }
+     ],
+     "displayArtist": "Puscifer"
+    },
+    {
+     "id": "0gYKsZXsT8KfWovtLmHqI4",
+     "name": "Alice by the Moon",
+     "artist": "The Checks",
+     "artistId": "1TeigLa2FBy3jtyksTv2y6",
+     "songCount": 13,
+     "duration": 3015,
+     "year": 2009,
+     "genre": "Rock",
+     "musicBrainzId": "0a3296ab-f6fc-477e-8138-ad79d4379791",
+     "isCompilation": false,
+     "releaseTypes": [
+      "album"
+     ]
+    }
+   ]
+  }
+ }
+}

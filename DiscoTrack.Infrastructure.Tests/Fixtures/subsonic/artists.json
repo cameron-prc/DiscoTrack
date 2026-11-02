@@ -1,0 +1,128 @@
+{
+ "subsonic-response": {
+  "status": "ok",
+  "version": "1.16.1",
+  "type": "navidrome",
+  "serverVersion": "0.64.2",
+  "openSubsonic": true,
+  "artists": {
+   "ignoredArticles": "The El La Los Las Le Les Os As O A",
+   "index": [
+    {
+     "name": "A",
+     "artist": [
+      {
+       "id": "0HodC6aFEmLZ8bNs0R7UjV",
+       "name": "Avenged Sevenfold",
+       "albumCount": 8,
+       "musicBrainzId": "24e1b53c-3085-4581-8472-0b0088d2508c",
+       "roles": [
+        "artist",
+        "maincredit",
+        "albumartist"
+       ]
+      }
+     ]
+    },
+    {
+     "name": "C",
+     "artist": [
+      {
+       "id": "1TeigLa2FBy3jtyksTv2y6",
+       "name": "The Checks",
+       "albumCount": 2,
+       "musicBrainzId": "",
+       "roles": [
+        "artist",
+        "maincredit",
+        "albumartist"
+       ]
+      }
+     ]
+    },
+    {
+     "name": "K",
+     "artist": [
+      {
+       "id": "0b3NeVYlGx7CIAhdPpkFg0",
+       "name": "King Gizzard & the Lizard Wizard",
+       "albumCount": 44,
+       "musicBrainzId": "f58384a4-2ad2-4f24-89c5-c7b74ae1cce7",
+       "roles": [
+        "albumartist",
+        "artist",
+        "maincredit"
+       ]
+      }
+     ]
+    },
+    {
+     "name": "N",
+     "artist": [
+      {
+       "id": "3GSnSEURz17ltddsamzmSD",
+       "name": "Nine Inch Nails",
+       "albumCount": 31,
+       "musicBrainzId": "b7ffd2af-418f-4be2-bdd1-22f8b48613da",
+       "roles": [
+        "maincredit",
+        "albumartist",
+        "artist"
+       ]
+      }
+     ]
+    },
+    {
+     "name": "P",
+     "artist": [
+      {
+       "id": "3BCOoHVnn287SKIxXFdoZy",
+       "name": "Puscifer",
+       "albumCount": 14,
+       "musicBrainzId": "6e4277d8-7b64-44a3-b823-13bd15114e22",
+       "roles": [
+        "maincredit",
+        "albumartist",
+        "artist"
+       ]
+      }
+     ]
+    },
+    {
+     "name": "S",
+     "artist": [
+      {
+       "id": "3iEzJ4wYdWOaFHgMcwfnLW",
+       "name": "System of a Down",
+       "albumCount": 4,
+       "musicBrainzId": "cc0b7089-c08d-4c10-b6b0-873582c17fd6",
+       "roles": [
+        "artist",
+        "maincredit",
+        "albumartist"
+       ]
+      }
+     ]
+    },
+    {
+     "name": "T",
+     "artist": [
+      {
+       "id": "3LZNqFXV2xMsnuH7Iel2FT",
+       "name": "Tool",
+       "albumCount": 7,
+       "musicBrainzId": "66fc5bf8-daa4-4241-b378-9bc9077939d2",
+       "roles": [
+        "producer",
+        "maincredit",
+        "albumartist",
+        "artist",
+        "performer"
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ }
+}
