@@ -4,6 +4,7 @@ namespace DiscoTrack.Core.Albums;
 
 public class Album
 {
+	public AlbumId Id { get; init; } = AlbumId.New();
 	public string? SubsonicId { get; set; }
 	public required string Title { get; set; }
 	public required int Year { get; set; }

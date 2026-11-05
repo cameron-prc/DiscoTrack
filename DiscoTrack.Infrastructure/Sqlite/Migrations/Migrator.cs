@@ -1,7 +1,7 @@
 using DbUp;
 using DbUp.Engine;
 
-namespace DiscoTrack.Infrastructure.Migrations;
+namespace DiscoTrack.Infrastructure.Sqlite.Migrations;
 
 public static class Migrator
 {

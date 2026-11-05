@@ -1,6 +1,6 @@
 using Microsoft.Data.Sqlite;
 
-namespace DiscoTrack.Infrastructure.Tests;
+namespace DiscoTrack.Infrastructure.Tests.Sqlite;
 
 public sealed class TestDatabase : IDisposable
 {

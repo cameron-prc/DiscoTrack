@@ -1,5 +1,8 @@
+using DiscoTrack.Core.Catalogue;
 using DiscoTrack.Core.Library;
+using DiscoTrack.Infrastructure.Catalogue;
 using DiscoTrack.Infrastructure.Clients.Subsonic;
+using DiscoTrack.Infrastructure.Sqlite;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -17,6 +20,21 @@ public static class DependencyInjection
 		services.AddHttpClient<ISubsonicClient, SubsonicClient>((provider, http) =>
 			http.BaseAddress = new Uri(provider.GetRequiredService<IOptions<SubsonicOptions>>().Value.BaseUrl.TrimEnd('/') + "/"));
 		services.AddScoped<ILibrarySource, SubsonicLibrarySource>();
+		return services;
+	}
+
+	public static IServiceCollection AddSqlite(this IServiceCollection services, IConfiguration configuration)
+	{
+		services.AddOptions<SqliteOptions>()
+			.Bind(configuration.GetSection(SqliteOptions.Section))
+			.ValidateDataAnnotations()
+			.ValidateOnStart();
+		return services;
+	}
+
+	public static IServiceCollection AddSqliteCatalogue(this IServiceCollection services)
+	{
+		services.AddScoped<ICatalogue, SqliteCatalogue>();
 		return services;
 	}
 }

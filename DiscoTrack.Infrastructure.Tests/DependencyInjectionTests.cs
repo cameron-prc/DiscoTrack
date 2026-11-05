@@ -1,4 +1,7 @@
+using DiscoTrack.Core.Catalogue;
 using DiscoTrack.Infrastructure.Clients.Subsonic;
+using DiscoTrack.Infrastructure.Catalogue;
+using DiscoTrack.Infrastructure.Sqlite;
 using DiscoTrack.Infrastructure.Tests.Clients.Subsonic;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -25,6 +28,38 @@ public class DependencyInjectionTests
 		var options = BuildSubsonicOptions(25);
 
 		Assert.Equal(25, options.Value.PageSize);
+	}
+
+	[Fact]
+	public void AddSqliteCatalogue_resolves_a_catalogue()
+	{
+		var catalogue = BuildCatalogueProvider("Data Source=:memory:").GetRequiredService<ICatalogue>();
+
+		Assert.IsType<SqliteCatalogue>(catalogue);
+	}
+
+	[Fact]
+	public void AddSqlite_rejects_a_missing_connection_string()
+	{
+		var provider = BuildCatalogueProvider(connectionString: null);
+
+		var ex = Assert.Throws<OptionsValidationException>(() => provider.GetRequiredService<IOptions<SqliteOptions>>().Value);
+		Assert.Contains("ConnectionString", ex.Message);
+	}
+
+	private static ServiceProvider BuildCatalogueProvider(string? connectionString)
+	{
+		var configuration = new ConfigurationBuilder()
+			.AddInMemoryCollection(new Dictionary<string, string?>
+			{
+				[$"{SqliteOptions.Section}:ConnectionString"] = connectionString,
+			})
+			.Build();
+
+		return new ServiceCollection()
+			.AddSqlite(configuration)
+			.AddSqliteCatalogue()
+			.BuildServiceProvider();
 	}
 
 	private static IOptions<SubsonicOptions> BuildSubsonicOptions(int pageSize)

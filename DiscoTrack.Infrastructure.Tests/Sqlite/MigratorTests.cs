@@ -1,6 +1,6 @@
-using DiscoTrack.Infrastructure.Migrations;
+using DiscoTrack.Infrastructure.Sqlite.Migrations;
 
-namespace DiscoTrack.Infrastructure.Tests.Migrations;
+namespace DiscoTrack.Infrastructure.Tests.Sqlite;
 
 public sealed class MigratorTests : IDisposable
 {
@@ -19,7 +19,7 @@ public sealed class MigratorTests : IDisposable
 	{
 		var applied = Migrator.Migrate(_db.ConnectionString);
 
-		Assert.Equal(new[] { "DiscoTrack.Infrastructure.Migrations.0001_create_library_tables.sql" }, applied);
+		Assert.Equal(new[] { "DiscoTrack.Infrastructure.Sqlite.Migrations.0001_create_library_tables.sql" }, applied);
 		Assert.True(Migrator.IsUpToDate(_db.ConnectionString));
 	}
 
