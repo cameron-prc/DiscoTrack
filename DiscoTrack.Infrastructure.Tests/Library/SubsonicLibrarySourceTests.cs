@@ -1,8 +1,10 @@
 using DiscoTrack.Core.Library;
 using DiscoTrack.Infrastructure.Clients.Subsonic;
 using DiscoTrack.Infrastructure.Clients.Subsonic.Models;
+using DiscoTrack.Infrastructure.Library;
+using DiscoTrack.Infrastructure.Tests.Clients.Subsonic;
 
-namespace DiscoTrack.Infrastructure.Tests.Clients.Subsonic;
+namespace DiscoTrack.Infrastructure.Tests.Library;
 
 public class SubsonicLibrarySourceTests
 {

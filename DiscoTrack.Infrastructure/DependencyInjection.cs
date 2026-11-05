@@ -2,6 +2,7 @@ using DiscoTrack.Core.Catalogue;
 using DiscoTrack.Core.Library;
 using DiscoTrack.Infrastructure.Catalogue;
 using DiscoTrack.Infrastructure.Clients.Subsonic;
+using DiscoTrack.Infrastructure.Library;
 using DiscoTrack.Infrastructure.Sqlite;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
