@@ -9,15 +9,14 @@ public class SubsonicLibrarySource(ISubsonicClient client, IOptions<SubsonicOpti
 {
 	private readonly int _pageSize = options.Value.PageSize;
 
-	public async Task<IReadOnlyList<LibraryAlbum>> GetAlbums(CancellationToken? ct = null)
+	public async Task<IReadOnlyList<LibraryAlbum>> GetAlbums(CancellationToken ct)
 	{
-		var token = ct ?? CancellationToken.None;
 		var albums = new List<LibraryAlbum>();
 		IReadOnlyList<AlbumID3> albumPage;
 
 		do
 		{
-			albumPage = await client.GetAlbumList2(AlbumListType.AlphabeticalByName, _pageSize, albums.Count, token);
+			albumPage = await client.GetAlbumList2(AlbumListType.AlphabeticalByName, _pageSize, albums.Count, ct);
 			albums.AddRange(albumPage.Select(a => a.ToLibraryAlbum()));
 		}
 		while (albumPage.Count >= _pageSize);
@@ -25,9 +24,9 @@ public class SubsonicLibrarySource(ISubsonicClient client, IOptions<SubsonicOpti
 		return albums;
 	}
 
-	public async Task<IReadOnlyList<LibraryArtist>> GetArtists(CancellationToken? ct = null)
+	public async Task<IReadOnlyList<LibraryArtist>> GetArtists(CancellationToken ct)
 	{
-		var indexes = await client.GetArtists(ct ?? CancellationToken.None);
+		var indexes = await client.GetArtists(ct);
 
 		return indexes
 			.SelectMany(index => index.Artist)
