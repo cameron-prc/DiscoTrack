@@ -27,7 +27,7 @@ public static class DependencyInjection
 	public static IServiceCollection AddSqlite(this IServiceCollection services, IConfiguration configuration)
 	{
 		services.AddOptions<SqliteOptions>()
-			.Bind(configuration.GetSection(SqliteOptions.Section))
+			.Configure(options => options.ConnectionString = configuration.GetConnectionString(SqliteOptions.ConnectionStringName)!)
 			.ValidateDataAnnotations()
 			.ValidateOnStart();
 		return services;

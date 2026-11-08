@@ -52,7 +52,7 @@ public class DependencyInjectionTests
 		var configuration = new ConfigurationBuilder()
 			.AddInMemoryCollection(new Dictionary<string, string?>
 			{
-				[$"{SqliteOptions.Section}:ConnectionString"] = connectionString,
+				[$"ConnectionStrings:{SqliteOptions.ConnectionStringName}"] = connectionString,
 			})
 			.Build();
 
