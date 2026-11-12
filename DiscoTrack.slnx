@@ -1,4 +1,6 @@
 <Solution>
+  <Project Path="DiscoTrack.Common.Tests/DiscoTrack.Common.Tests.csproj" />
+  <Project Path="DiscoTrack.Common/DiscoTrack.Common.csproj" />
   <Project Path="DiscoTrack.Core.Tests/DiscoTrack.Core.Tests.csproj" />
   <Project Path="DiscoTrack.Core/DiscoTrack.Core.csproj" />
   <Project Path="DiscoTrack.Infrastructure.Tests/DiscoTrack.Infrastructure.Tests.csproj" />
