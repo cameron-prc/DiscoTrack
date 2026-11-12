@@ -1,0 +1,12 @@
+root = true
+
+[*.cs]
+# Turn unhandled switch expression arms into strict build errors
+dotnet_diagnostic.CS8509.severity = error
+
+
+# Unnamed enum values are not a concern; CS8509 covers the named ones
+dotnet_diagnostic.CS8524.severity = none
+
+# Plain ILogger calls are cheap enough here and using LoggerMessage clutters up the source
+dotnet_diagnostic.CA1848.severity = none
