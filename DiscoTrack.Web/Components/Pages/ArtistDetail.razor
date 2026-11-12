@@ -1,0 +1,57 @@
+@page "/artists/{Id:guid}"
+@inject ICatalogue Catalogue
+
+@if (_loading)
+{
+	<p>Loading</p>
+}
+else if (_artist is null)
+{
+	<PageTitle>Artist not found</PageTitle>
+	<h1>Artist not found</h1>
+	<p><a href="/artists">Back to artists</a></p>
+}
+else
+{
+	<PageTitle>@_artist.Name</PageTitle>
+	<h1>@_artist.Name</h1>
+	<p>count: @_albums.Count</p>
+	<table>
+		<thead>
+			<tr>
+				<th>Title</th>
+				<th>Year</th>
+			</tr>
+		</thead>
+		<tbody>
+			@foreach (var album in _albums)
+			{
+				<tr>
+					<td>@album.Title</td>
+					<td>@album.Year</td>
+				</tr>
+			}
+		</tbody>
+	</table>
+}
+
+@code {
+	[Parameter]
+	public Guid Id { get; set; }
+
+	private bool _loading = true;
+	private Artist? _artist;
+	private IReadOnlyList<Album> _albums = [];
+
+	protected override async Task OnInitializedAsync()
+	{
+		var artistId = new ArtistId(Id);
+		var artists = await Catalogue.GetArtists(CancellationToken.None);
+		_artist = artists.FirstOrDefault(artist => artist.Id == artistId);
+		if (_artist is not null)
+		{
+			_albums = await Catalogue.GetArtistAlbums(artistId, CancellationToken.None);
+		}
+		_loading = false;
+	}
+}

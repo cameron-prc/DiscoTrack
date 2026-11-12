@@ -1,0 +1,15 @@
+@page "/jobs"
+
+@inject IJobQueue jobQueue;
+@rendermode InteractiveServer
+
+<h1>Jobs</h1>
+
+<button @onclick="SyncLibrary">Sync library</button>
+
+@code {
+	private async Task SyncLibrary()
+	{
+		await jobQueue.Enqueue(new Job(JobType.SyncLibrary), CancellationToken.None);
+	}
+}

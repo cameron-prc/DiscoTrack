@@ -1,0 +1,54 @@
+@page "/artists"
+@inject ICatalogue Catalogue
+
+<PageTitle>Artists</PageTitle>
+
+<h1>Artists</h1>
+
+@if (_loading)
+{
+	<p>Loading</p>
+}
+else
+{
+	<p>count: @_artists.Count</p>
+	<table>
+		<thead>
+			<tr>
+				<th>Name</th>
+				<th>Albums</th>
+			</tr>
+		</thead>
+		<tbody>
+			@foreach (var artist in _artists)
+			{
+				<tr>
+					<td><a href="/artists/@artist.Id">@artist.Name</a></td>
+					<td>@AlbumCount(artist)</td>
+				</tr>
+			}
+		</tbody>
+	</table>
+}
+
+@code {
+	private bool _loading = true;
+	private IReadOnlyList<Artist> _artists = [];
+	private Dictionary<ArtistId, int> _albumCounts = [];
+
+	protected override async Task OnInitializedAsync()
+	{
+		_artists = await Catalogue.GetArtists(CancellationToken.None);
+		var albums = await Catalogue.GetAlbums(CancellationToken.None);
+		_albumCounts = albums
+			.SelectMany(album => album.Artists)
+			.GroupBy(credit => credit.Artist.Id)
+			.ToDictionary(group => group.Key, group => group.Count());
+		_loading = false;
+	}
+
+	private int AlbumCount(Artist artist)
+	{
+		return _albumCounts.GetValueOrDefault(artist.Id);
+	}
+}
