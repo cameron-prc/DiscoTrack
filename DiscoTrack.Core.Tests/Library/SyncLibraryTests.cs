@@ -1,6 +1,8 @@
 using DiscoTrack.Core.Albums;
 using DiscoTrack.Core.Artists;
 using DiscoTrack.Core.Library;
+using DiscoTrack.Core.Library.SyncLibrary;
+using Moq;
 using static DiscoTrack.Core.Tests.Library.LibraryValues;
 
 namespace DiscoTrack.Core.Tests.Library;
@@ -142,59 +144,98 @@ public class SyncLibraryTests
 	}
 
 	[Fact]
-	public async Task Propagates_a_failure_reading_catalogue_artists_and_writes_nothing()
+	public async Task Returns_a_read_catalogue_error_when_reading_artists_fails_and_writes_nothing()
 	{
 		_source.Albums.Add(Album("alb-hunting-whales", "Hunting Whales", 2007, TheChecks));
 		_catalogue.FailingMethod = nameof(FakeCatalogue.GetArtists);
 
-		await Assert.ThrowsAsync<InvalidOperationException>(() => Sync().Run(CancellationToken.None));
+		var result = await Sync().Run(CancellationToken.None);
+
+		Assert.IsType<FailedToReadCatalogueError>(Assert.Single(result.GetLeft));
 
 		AssertNothingWritten();
 	}
 
 	[Fact]
-	public async Task Propagates_a_failure_reading_catalogue_albums_and_writes_nothing()
+	public async Task Returns_a_read_catalogue_error_when_reading_albums_fails_and_writes_nothing()
 	{
 		_source.Albums.Add(Album("alb-hunting-whales", "Hunting Whales", 2007, TheChecks));
 		_catalogue.FailingMethod = nameof(FakeCatalogue.GetAlbums);
 
-		await Assert.ThrowsAsync<InvalidOperationException>(() => Sync().Run(CancellationToken.None));
+		var result = await Sync().Run(CancellationToken.None);
+
+		Assert.IsType<FailedToReadCatalogueError>(Assert.Single(result.GetLeft));
 
 		AssertNothingWritten();
 	}
 
 	[Fact]
-	public async Task Propagates_a_failure_reading_the_library_and_writes_nothing()
+	public async Task Returns_a_read_library_error_when_reading_the_library_fails_and_writes_nothing()
 	{
 		_source.Albums.Add(Album("alb-hunting-whales", "Hunting Whales", 2007, TheChecks));
 		_source.FailingMethod = nameof(FakeLibrarySource.GetAlbums);
 
-		await Assert.ThrowsAsync<InvalidOperationException>(() => Sync().Run(CancellationToken.None));
+		var result = await Sync().Run(CancellationToken.None);
+
+		Assert.IsType<FailedToReadLibraryError>(Assert.Single(result.GetLeft));
 
 		AssertNothingWritten();
 	}
 
 	[Fact]
-	public async Task Propagates_a_failure_adding_artists_and_does_not_add_albums()
+	public async Task Returns_a_save_error_when_adding_artists_fails_and_does_not_add_albums()
 	{
 		_source.Albums.Add(Album("alb-hunting-whales", "Hunting Whales", 2007, TheChecks));
 		_catalogue.FailingMethod = nameof(FakeCatalogue.AddArtists);
 
-		await Assert.ThrowsAsync<InvalidOperationException>(() => Sync().Run(CancellationToken.None));
+		var result = await Sync().Run(CancellationToken.None);
+
+		Assert.IsType<FailedToSaveCatalogueError>(Assert.Single(result.GetLeft));
 
 		Assert.DoesNotContain(nameof(FakeCatalogue.AddAlbums), _catalogue.Calls);
 	}
 
 	[Fact]
-	public async Task Propagates_a_failure_adding_albums_after_artists_were_added()
+	public async Task Returns_a_save_error_when_adding_albums_fails_after_artists_were_added()
 	{
 		_source.Albums.Add(Album("alb-hunting-whales", "Hunting Whales", 2007, TheChecks));
 		_catalogue.FailingMethod = nameof(FakeCatalogue.AddAlbums);
 
-		await Assert.ThrowsAsync<InvalidOperationException>(() => Sync().Run(CancellationToken.None));
+		var result = await Sync().Run(CancellationToken.None);
+
+		Assert.IsType<FailedToSaveCatalogueError>(Assert.Single(result.GetLeft));
 
 		Assert.Single(_catalogue.Artists);
 		Assert.Empty(_catalogue.Albums);
+	}
+
+	[Fact]
+	public async Task Returns_the_new_artists_and_albums_and_the_skipped_albums()
+	{
+		_source.Albums.AddRange([
+			Album("alb-untagged", "Untagged", null, TheChecks),
+			Album("alb-hunting-whales", "Hunting Whales", 2007, TheChecks),
+		]);
+
+		var result = await Sync().Run(CancellationToken.None);
+
+		var response = result.GetRight;
+		Assert.Equal(["art-checks"], response.NewArtists.Select(a => a.SubsonicId));
+		Assert.Equal(["alb-hunting-whales"], response.NewAlbums.Select(a => a.SubsonicId));
+		Assert.Equal(["alb-untagged"], response.UnprocessedAlbums.Select(a => a.SubsonicId));
+	}
+
+	[Fact]
+	public async Task Cancellation_propagates_instead_of_becoming_an_error()
+	{
+		var source = new Mock<ILibrarySource>();
+		source
+			.Setup(s => s.GetAlbums(It.IsAny<CancellationToken>()))
+			.ThrowsAsync(new OperationCanceledException());
+
+		await Assert.ThrowsAsync<OperationCanceledException>(() => new SyncLibrary(_catalogue, source.Object).Run(CancellationToken.None));
+
+		AssertNothingWritten();
 	}
 
 	private void AssertNothingWritten()

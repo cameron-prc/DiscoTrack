@@ -1,25 +1,44 @@
+using DiscoTrack.Common;
 using DiscoTrack.Core.Albums;
 using DiscoTrack.Core.Artists;
 using DiscoTrack.Core.Catalogue;
 
-namespace DiscoTrack.Core.Library;
+namespace DiscoTrack.Core.Library.SyncLibrary;
 
 public class SyncLibrary(ICatalogue catalogue, ILibrarySource librarySource)
 {
-	public async Task Run(CancellationToken ct)
+	public async Task<Either<IList<ISyncLibraryError>, SyncLibraryResponse>> Run(CancellationToken ct)
 	{
+		IReadOnlyList<Artist> knownArtists;
+		IReadOnlyList<Album> knownAlbums;
+		IReadOnlyList<LibraryAlbum> libraryAlbums;
+
 		var newCatalogueArtists = new List<Artist>();
 		var newCatalogueAlbums = new List<Album>();
+		var failedToProcess = new List<LibraryAlbum>();
 
-		// TODO: Handle failure
-		var knownArtists = await catalogue.GetArtists(ct);
-		var knownAlbums = await catalogue.GetAlbums(ct);
+		try
+		{
+			knownArtists = await catalogue.GetArtists(ct);
+			knownAlbums = await catalogue.GetAlbums(ct);
+		}
+		catch (Exception exception) when (exception is not OperationCanceledException)
+		{
+			return new List<ISyncLibraryError> { new FailedToReadCatalogueError(exception.Message) };
+		}
+
+		try
+		{
+			libraryAlbums = await librarySource.GetAlbums(ct);
+		}
+		catch (Exception exception) when (exception is not OperationCanceledException)
+		{
+			return new List<ISyncLibraryError> { new FailedToReadLibraryError(exception.Message) };
+		}
 
 		var artistsDict = knownArtists.Where(artist => artist.SubsonicId != null).ToDictionary(knownArtist => knownArtist.SubsonicId!);
 		var albumDict = knownAlbums.Where(album => album.SubsonicId != null).ToDictionary(knownAlbum => knownAlbum.SubsonicId!);
 
-		// TODO: Handle failure
-		var libraryAlbums = await librarySource.GetAlbums(ct);
 		var newLibraryArtists = libraryAlbums.SelectMany(album => album.Artists).Where(artist => !artistsDict.ContainsKey(artist.SubsonicId)).DistinctBy(artist => artist.SubsonicId);
 
 		newCatalogueArtists = newLibraryArtists.Select(newLibraryArtist => new Artist { Name = newLibraryArtist.Name, SubsonicId = newLibraryArtist.SubsonicId }).ToList();
@@ -42,7 +61,7 @@ public class SyncLibrary(ICatalogue catalogue, ILibrarySource librarySource)
 				var album = new Album
 				{
 					Title = newLibraryAlbum.Title,
-					Year = newLibraryAlbum.Year!.Value,
+					Year = newLibraryAlbum.Year!.Value, // Not technically required by subsonic but required by us
 					SubsonicId = newLibraryAlbum.SubsonicId,
 					IsCompilation = newLibraryAlbum.IsCompilation,
 					Artists = albumArtists
@@ -50,17 +69,22 @@ public class SyncLibrary(ICatalogue catalogue, ILibrarySource librarySource)
 
 				newCatalogueAlbums.Add(album);
 			}
-			catch (Exception exception)
+			catch (Exception)
 			{
-				// TODO: Add a proper logger
-				Console.WriteLine($"Unable to create album {newLibraryAlbum.Title} ({newLibraryAlbum.Year})");
-				Console.WriteLine(exception.Message);
+				failedToProcess.Add(newLibraryAlbum);
 			}
 		}
 
-		await catalogue.AddArtists(newCatalogueArtists, ct);
-		await catalogue.AddAlbums(newCatalogueAlbums, ct);
+		try
+		{
+			await catalogue.AddArtists(newCatalogueArtists, ct);
+			await catalogue.AddAlbums(newCatalogueAlbums, ct);
+		}
+		catch (Exception exception) when (exception is not OperationCanceledException)
+		{
+			return new List<ISyncLibraryError> { new FailedToSaveCatalogueError(exception.Message) };
+		}
 
-		// TODO: Return a error or response union
+		return new SyncLibraryResponse(newCatalogueArtists, newCatalogueAlbums, failedToProcess);
 	}
 }
