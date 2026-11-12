@@ -1,6 +1,8 @@
 using DiscoTrack.Core.Catalogue;
+using DiscoTrack.Core.Jobs;
 using DiscoTrack.Infrastructure.Clients.Subsonic;
 using DiscoTrack.Infrastructure.Catalogue;
+using DiscoTrack.Infrastructure.Jobs;
 using DiscoTrack.Infrastructure.Sqlite;
 using DiscoTrack.Infrastructure.Tests.Clients.Subsonic;
 using Microsoft.Extensions.Configuration;
@@ -36,6 +38,21 @@ public class DependencyInjectionTests
 		var catalogue = BuildCatalogueProvider("Data Source=:memory:").GetRequiredService<ICatalogue>();
 
 		Assert.IsType<SqliteCatalogue>(catalogue);
+	}
+
+	[Fact]
+	public void AddInMemoryJobQueue_shares_one_queue_across_scopes()
+	{
+		using var provider = new ServiceCollection()
+			.AddInMemoryJobQueue()
+			.BuildServiceProvider();
+		using var first = provider.CreateScope();
+		using var second = provider.CreateScope();
+
+		var queue = first.ServiceProvider.GetRequiredService<IJobQueue>();
+
+		Assert.IsType<InMemoryJobQueue>(queue);
+		Assert.Same(queue, second.ServiceProvider.GetRequiredService<IJobQueue>());
 	}
 
 	[Fact]

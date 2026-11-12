@@ -1,7 +1,9 @@
 using DiscoTrack.Core.Catalogue;
+using DiscoTrack.Core.Jobs;
 using DiscoTrack.Core.Library;
 using DiscoTrack.Infrastructure.Catalogue;
 using DiscoTrack.Infrastructure.Clients.Subsonic;
+using DiscoTrack.Infrastructure.Jobs;
 using DiscoTrack.Infrastructure.Library;
 using DiscoTrack.Infrastructure.Sqlite;
 using Microsoft.Extensions.Configuration;
@@ -36,6 +38,18 @@ public static class DependencyInjection
 	public static IServiceCollection AddSqliteCatalogue(this IServiceCollection services)
 	{
 		services.AddScoped<ICatalogue, SqliteCatalogue>();
+		return services;
+	}
+
+	public static IServiceCollection AddInMemoryJobQueue(this IServiceCollection services)
+	{
+		services.AddSingleton<IJobQueue, InMemoryJobQueue>();
+		return services;
+	}
+
+	public static IServiceCollection AddJobBackgroundService(this IServiceCollection services)
+	{
+		services.AddHostedService<JobBackgroundService>();
 		return services;
 	}
 }
