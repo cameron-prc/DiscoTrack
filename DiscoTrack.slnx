@@ -3,4 +3,5 @@
   <Project Path="DiscoTrack.Core/DiscoTrack.Core.csproj" />
   <Project Path="DiscoTrack.Infrastructure.Tests/DiscoTrack.Infrastructure.Tests.csproj" />
   <Project Path="DiscoTrack.Infrastructure/DiscoTrack.Infrastructure.csproj" />
+  <Project Path="DiscoTrack.Web/DiscoTrack.Web.csproj" />
 </Solution>
