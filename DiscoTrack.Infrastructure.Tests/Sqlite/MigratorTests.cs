@@ -1,4 +1,6 @@
+using Dapper;
 using DiscoTrack.Infrastructure.Sqlite.Migrations;
+using Microsoft.Data.Sqlite;
 
 namespace DiscoTrack.Infrastructure.Tests.Sqlite;
 
@@ -19,7 +21,11 @@ public sealed class MigratorTests : IDisposable
 	{
 		var applied = Migrator.Migrate(_db.ConnectionString);
 
-		Assert.Equal(new[] { "DiscoTrack.Infrastructure.Sqlite.Migrations.0001_create_library_tables.sql" }, applied);
+		Assert.Equal(new[]
+		{
+			"DiscoTrack.Infrastructure.Sqlite.Migrations.0001_create_library_tables.sql",
+			"DiscoTrack.Infrastructure.Sqlite.Migrations.0002_move_subsonic_ids_to_external_ids.sql",
+		}, applied);
 		Assert.True(Migrator.IsUpToDate(_db.ConnectionString));
 	}
 
@@ -28,7 +34,29 @@ public sealed class MigratorTests : IDisposable
 	{
 		Migrator.Migrate(_db.ConnectionString);
 
-		Assert.Superset(new HashSet<string> { "Artists", "Albums", "AlbumArtists" }, _db.TableNames().ToHashSet());
+		Assert.Superset(new HashSet<string> { "Artists", "Albums", "AlbumArtists", "ArtistExternalIds", "AlbumExternalIds" }, _db.TableNames().ToHashSet());
+	}
+
+	[Fact]
+	public void Moving_to_external_ids_keeps_existing_subsonic_ids()
+	{
+		using var connection = new SqliteConnection(_db.ConnectionString);
+		connection.Open();
+		connection.Execute(Script("0001_create_library_tables.sql"));
+		connection.Execute("""
+			INSERT INTO Artists (Id, SubsonicId, Name) VALUES ('artist-1', 'art-tool', 'Tool'), ('artist-2', NULL, 'Shihad');
+			INSERT INTO Albums (Id, SubsonicId, Title, Year) VALUES ('album-1', 'alb-salival', 'Salival', 2000);
+			""");
+
+		connection.Execute(Script("0002_move_subsonic_ids_to_external_ids.sql"));
+
+		Assert.Equal(
+			[("artist-1", "Subsonic", "art-tool")],
+			connection.Query<(string, string, string)>("SELECT ArtistId, Provider, Value FROM ArtistExternalIds"));
+		Assert.Equal(
+			[("album-1", "Subsonic", "alb-salival")],
+			connection.Query<(string, string, string)>("SELECT AlbumId, Provider, Value FROM AlbumExternalIds"));
+		Assert.Equal(2, connection.ExecuteScalar<int>("SELECT COUNT(*) FROM Artists"));
 	}
 
 	[Fact]
@@ -37,5 +65,12 @@ public sealed class MigratorTests : IDisposable
 		Migrator.Migrate(_db.ConnectionString);
 
 		Assert.Empty(Migrator.Migrate(_db.ConnectionString));
+	}
+
+	private static string Script(string name)
+	{
+		using var stream = typeof(Migrator).Assembly.GetManifestResourceStream($"DiscoTrack.Infrastructure.Sqlite.Migrations.{name}")!;
+		using var reader = new StreamReader(stream);
+		return reader.ReadToEnd();
 	}
 }

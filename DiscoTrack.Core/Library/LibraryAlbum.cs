@@ -1,8 +1,11 @@
+using DiscoTrack.Core.ExternalIds;
+
 namespace DiscoTrack.Core.Library;
 
 public record LibraryAlbum(
-	string SubsonicId,
+	ExternalId Id,
 	string Title,
 	int? Year,
 	bool IsCompilation,
-	IReadOnlyList<LibraryArtist> Artists);
+	IReadOnlyList<LibraryArtist> Artists,
+	MusicBrainzId? MusicBrainzId = null);

@@ -1,5 +1,6 @@
 using DiscoTrack.Core.Albums;
 using DiscoTrack.Core.Artists;
+using DiscoTrack.Core.ExternalIds;
 using DiscoTrack.Core.Library;
 using DiscoTrack.Core.Library.SyncLibrary;
 using Moq;
@@ -38,8 +39,8 @@ public class SyncLibraryTests
 
 		await Sync().Run(CancellationToken.None);
 
-		Assert.Equal(["art-checks", "art-beck", "art-mcbaise"], _catalogue.Artists.Select(a => a.SubsonicId));
-		Assert.Equal(["alb-hunting-whales", "alb-alice", "alb-odelay", "alb-capitale"], _catalogue.Albums.Select(a => a.SubsonicId));
+		Assert.Equal([new SubsonicId("art-checks"), new SubsonicId("art-beck"), new SubsonicId("art-mcbaise")], _catalogue.Artists.SelectMany(a => a.ExternalIds));
+		Assert.Equal([new SubsonicId("alb-hunting-whales"), new SubsonicId("alb-alice"), new SubsonicId("alb-odelay"), new SubsonicId("alb-capitale")], _catalogue.Albums.SelectMany(a => a.ExternalIds));
 	}
 
 	[Fact]
@@ -50,7 +51,7 @@ public class SyncLibraryTests
 		await Sync().Run(CancellationToken.None);
 
 		var album = Assert.Single(_catalogue.Albums);
-		Assert.Equal("alb-split", album.SubsonicId);
+		Assert.Equal([new SubsonicId("alb-split")], album.ExternalIds);
 		Assert.Equal("Split", album.Title);
 		Assert.Equal(2010, album.Year);
 		Assert.False(album.IsCompilation);
@@ -73,7 +74,7 @@ public class SyncLibraryTests
 	[Fact]
 	public async Task Credits_reuse_an_artist_already_in_the_catalogue()
 	{
-		var existingChecks = new Artist { SubsonicId = "art-checks", Name = "The Checks" };
+		var existingChecks = new Artist { ExternalIds = [new SubsonicId("art-checks")], Name = "The Checks" };
 		_catalogue.Artists.Add(existingChecks);
 		_source.Albums.Add(Album("alb-hunting-whales", "Hunting Whales", 2007, TheChecks));
 
@@ -87,8 +88,8 @@ public class SyncLibraryTests
 	[Fact]
 	public async Task Skips_albums_already_in_the_catalogue()
 	{
-		_catalogue.Artists.Add(new Artist { SubsonicId = "art-checks", Name = "The Checks" });
-		_catalogue.Albums.Add(new Album { SubsonicId = "alb-hunting-whales", Title = "Hunting Whales", Year = 2007 });
+		_catalogue.Artists.Add(new Artist { ExternalIds = [new SubsonicId("art-checks")], Name = "The Checks" });
+		_catalogue.Albums.Add(new Album { ExternalIds = [new SubsonicId("alb-hunting-whales")], Title = "Hunting Whales", Year = 2007 });
 		_source.Albums.AddRange([
 			Album("alb-hunting-whales", "Hunting Whales", 2007, TheChecks),
 			Album("alb-alice", "Alice by the Moon", 2008, TheChecks),
@@ -96,7 +97,7 @@ public class SyncLibraryTests
 
 		await Sync().Run(CancellationToken.None);
 
-		Assert.Equal(["alb-hunting-whales", "alb-alice"], _catalogue.Albums.Select(a => a.SubsonicId));
+		Assert.Equal([new SubsonicId("alb-hunting-whales"), new SubsonicId("alb-alice")], _catalogue.Albums.SelectMany(a => a.ExternalIds));
 		Assert.Single(_catalogue.Artists);
 	}
 
@@ -127,8 +128,48 @@ public class SyncLibraryTests
 
 		await Sync().Run(CancellationToken.None);
 
-		Assert.Equal(["alb-hunting-whales"], _catalogue.Albums.Select(a => a.SubsonicId));
+		Assert.Equal([new SubsonicId("alb-hunting-whales")], _catalogue.Albums.SelectMany(a => a.ExternalIds));
 		Assert.Single(_catalogue.Artists);
+	}
+
+	[Fact]
+	public async Task Stores_musicbrainz_ids_alongside_the_source_ids()
+	{
+		var tool = new LibraryArtist(new SubsonicId("art-tool"), "Tool", new MusicBrainzId("mb-tool"));
+		_source.Albums.Add(Album("alb-lateralus", "Lateralus", 2001, tool) with { MusicBrainzId = new MusicBrainzId("mb-lateralus") });
+
+		await Sync().Run(CancellationToken.None);
+
+		Assert.Equal([new SubsonicId("art-tool"), new MusicBrainzId("mb-tool")], Assert.Single(_catalogue.Artists).ExternalIds);
+		Assert.Equal([new SubsonicId("alb-lateralus"), new MusicBrainzId("mb-lateralus")], Assert.Single(_catalogue.Albums).ExternalIds);
+	}
+
+	[Fact]
+	public async Task Leaves_off_a_musicbrainz_id_another_artist_in_the_run_already_holds()
+	{
+		var wolfAlice = new LibraryArtist(new SubsonicId("art-wolf-alice"), "Wolf Alice", new MusicBrainzId("mb-wolf-alice"));
+		var wolfAlce = new LibraryArtist(new SubsonicId("art-wolf-alce"), "Wolf Alce", new MusicBrainzId("mb-wolf-alice"));
+		_source.Albums.AddRange([
+			Album("alb-my-love-is-cool", "My Love Is Cool", 2015, wolfAlice),
+			Album("alb-visions", "Visions of a Life", 2017, wolfAlce),
+		]);
+
+		await Sync().Run(CancellationToken.None);
+
+		Assert.Equal(
+			[[new SubsonicId("art-wolf-alice"), new MusicBrainzId("mb-wolf-alice")], [new SubsonicId("art-wolf-alce")]],
+			_catalogue.Artists.Select(a => a.ExternalIds));
+	}
+
+	[Fact]
+	public async Task Leaves_off_a_musicbrainz_id_an_album_in_the_catalogue_already_holds()
+	{
+		_catalogue.Albums.Add(new Album { ExternalIds = [new SubsonicId("alb-odelay"), new MusicBrainzId("mb-odelay")], Title = "Odelay", Year = 1996 });
+		_source.Albums.Add(Album("alb-odelay-rip", "Odelay", 1996, Beck) with { MusicBrainzId = new MusicBrainzId("mb-odelay") });
+
+		await Sync().Run(CancellationToken.None);
+
+		Assert.Equal([new SubsonicId("alb-odelay-rip")], _catalogue.Albums[1].ExternalIds);
 	}
 
 	[Fact]
@@ -220,9 +261,9 @@ public class SyncLibraryTests
 		var result = await Sync().Run(CancellationToken.None);
 
 		var response = result.GetRight;
-		Assert.Equal(["art-checks"], response.NewArtists.Select(a => a.SubsonicId));
-		Assert.Equal(["alb-hunting-whales"], response.NewAlbums.Select(a => a.SubsonicId));
-		Assert.Equal(["alb-untagged"], response.UnprocessedAlbums.Select(a => a.SubsonicId));
+		Assert.Equal([new SubsonicId("art-checks")], response.NewArtists.SelectMany(a => a.ExternalIds));
+		Assert.Equal([new SubsonicId("alb-hunting-whales")], response.NewAlbums.SelectMany(a => a.ExternalIds));
+		Assert.Equal([new SubsonicId("alb-untagged")], response.UnprocessedAlbums.Select(a => a.Id));
 	}
 
 	[Fact]

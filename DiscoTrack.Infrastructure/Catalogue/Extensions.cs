@@ -1,27 +1,28 @@
 using DiscoTrack.Core.Albums;
 using DiscoTrack.Core.Artists;
+using DiscoTrack.Core.ExternalIds;
 using DiscoTrack.Infrastructure.Catalogue.Dtos;
 
 namespace DiscoTrack.Infrastructure.Catalogue;
 
 internal static class Extensions
 {
-	public static Artist ToArtist(this ArtistDto artist)
+	public static Artist ToArtist(this ArtistDto artist, ILookup<ArtistId, ExternalId> externalIds)
 	{
 		return new Artist
 		{
 			Id = artist.Id,
-			SubsonicId = artist.SubsonicId,
+			ExternalIds = externalIds[artist.Id].ToList(),
 			Name = artist.Name,
 		};
 	}
 
-	public static Album ToAlbum(this AlbumDto album, IReadOnlyList<AlbumArtist> artists)
+	public static Album ToAlbum(this AlbumDto album, IReadOnlyList<AlbumArtist> artists, ILookup<AlbumId, ExternalId> externalIds)
 	{
 		return new Album
 		{
 			Id = album.Id,
-			SubsonicId = album.SubsonicId,
+			ExternalIds = externalIds[album.Id].ToList(),
 			Title = album.Title,
 			Year = album.Year,
 			IsCompilation = album.IsCompilation,
@@ -29,13 +30,23 @@ internal static class Extensions
 		};
 	}
 
-	public static AlbumArtist ToAlbumArtist(this AlbumArtistDto albumArtist)
+	public static AlbumArtist ToAlbumArtist(this AlbumArtistDto albumArtist, ILookup<ArtistId, ExternalId> externalIds)
 	{
 		return new AlbumArtist
 		{
 			Position = albumArtist.Position,
-			Artist = new Artist { Id = albumArtist.ArtistId, SubsonicId = albumArtist.SubsonicId, Name = albumArtist.Name },
+			Artist = new Artist { Id = albumArtist.ArtistId, ExternalIds = externalIds[albumArtist.ArtistId].ToList(), Name = albumArtist.Name },
 		};
+	}
+
+	public static ILookup<ArtistId, ExternalId> ToLookup(this IEnumerable<ArtistExternalIdDto> externalIds)
+	{
+		return externalIds.ToLookup(externalId => externalId.ArtistId, externalId => ToExternalId(externalId.Provider, externalId.Value));
+	}
+
+	public static ILookup<AlbumId, ExternalId> ToLookup(this IEnumerable<AlbumExternalIdDto> externalIds)
+	{
+		return externalIds.ToLookup(externalId => externalId.AlbumId, externalId => ToExternalId(externalId.Provider, externalId.Value));
 	}
 
 	public static ArtistDto ToDto(this Artist artist)
@@ -43,7 +54,6 @@ internal static class Extensions
 		return new ArtistDto
 		{
 			Id = artist.Id,
-			SubsonicId = artist.SubsonicId,
 			Name = artist.Name,
 		};
 	}
@@ -53,7 +63,6 @@ internal static class Extensions
 		return new AlbumDto
 		{
 			Id = album.Id,
-			SubsonicId = album.SubsonicId,
 			Title = album.Title,
 			Year = album.Year,
 			IsCompilation = album.IsCompilation,
@@ -67,6 +76,36 @@ internal static class Extensions
 			AlbumId = albumId,
 			ArtistId = albumArtist.Artist.Id,
 			Position = albumArtist.Position,
+		};
+	}
+
+	public static ArtistExternalIdDto ToDto(this ExternalId externalId, ArtistId artistId)
+	{
+		return new ArtistExternalIdDto
+		{
+			ArtistId = artistId,
+			Provider = externalId.Provider.ToString(),
+			Value = externalId.Value,
+		};
+	}
+
+	public static AlbumExternalIdDto ToDto(this ExternalId externalId, AlbumId albumId)
+	{
+		return new AlbumExternalIdDto
+		{
+			AlbumId = albumId,
+			Provider = externalId.Provider.ToString(),
+			Value = externalId.Value,
+		};
+	}
+
+	private static ExternalId ToExternalId(string provider, string value)
+	{
+		return Enum.Parse<Provider>(provider) switch
+		{
+			Provider.Subsonic => new SubsonicId(value),
+			Provider.MusicBrainz => new MusicBrainzId(value),
+			_ => throw new ArgumentOutOfRangeException(nameof(provider), provider, null),
 		};
 	}
 }

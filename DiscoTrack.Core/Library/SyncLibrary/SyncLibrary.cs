@@ -2,6 +2,7 @@ using DiscoTrack.Common;
 using DiscoTrack.Core.Albums;
 using DiscoTrack.Core.Artists;
 using DiscoTrack.Core.Catalogue;
+using DiscoTrack.Core.ExternalIds;
 
 namespace DiscoTrack.Core.Library.SyncLibrary;
 
@@ -36,38 +37,57 @@ public class SyncLibrary(ICatalogue catalogue, ILibrarySource librarySource)
 			return new List<ISyncLibraryError> { new FailedToReadLibraryError(exception.Message) };
 		}
 
-		var artistsDict = knownArtists.Where(artist => artist.SubsonicId != null).ToDictionary(knownArtist => knownArtist.SubsonicId!);
-		var albumDict = knownAlbums.Where(album => album.SubsonicId != null).ToDictionary(knownAlbum => knownAlbum.SubsonicId!);
+		var artistsById = IndexByExternalId(knownArtists, artist => artist.ExternalIds);
+		var albumsById = IndexByExternalId(knownAlbums, album => album.ExternalIds);
 
-		var newLibraryArtists = libraryAlbums.SelectMany(album => album.Artists).Where(artist => !artistsDict.ContainsKey(artist.SubsonicId)).DistinctBy(artist => artist.SubsonicId);
+		var newLibraryArtists = libraryAlbums
+			.SelectMany(album => album.Artists)
+			.Where(artist => !artistsById.ContainsKey(artist.Id))
+			.DistinctBy(artist => artist.Id)
+			.ToList();
 
-		newCatalogueArtists = newLibraryArtists.Select(newLibraryArtist => new Artist { Name = newLibraryArtist.Name, SubsonicId = newLibraryArtist.SubsonicId }).ToList();
-
-		foreach (var artist in newCatalogueArtists)
+		foreach (var newLibraryArtist in newLibraryArtists)
 		{
-			artistsDict[artist.SubsonicId!] = artist;
+			var artist = new Artist
+			{
+				Name = newLibraryArtist.Name,
+				ExternalIds = ExternalIdsFor(newLibraryArtist.Id, newLibraryArtist.MusicBrainzId, artistsById),
+			};
+
+			newCatalogueArtists.Add(artist);
+			foreach (var externalId in artist.ExternalIds)
+			{
+				artistsById[externalId] = artist;
+			}
 		}
 
-		var newLibraryAlbums = libraryAlbums.Where(album => !albumDict.ContainsKey(album.SubsonicId)).DistinctBy(album => album.SubsonicId);
+		var newLibraryAlbums = libraryAlbums
+			.Where(album => !albumsById.ContainsKey(album.Id))
+			.DistinctBy(album => album.Id)
+			.ToList();
 
 		foreach (var newLibraryAlbum in newLibraryAlbums)
 		{
 			try
 			{
 				var albumArtists = newLibraryAlbum.Artists
-					.Select((newLibraryAlbumArtist, index) => new AlbumArtist { Artist = artistsDict[newLibraryAlbumArtist.SubsonicId], Position = index + 1 })
+					.Select((newLibraryAlbumArtist, index) => new AlbumArtist { Artist = artistsById[newLibraryAlbumArtist.Id], Position = index + 1 })
 					.ToList();
 
 				var album = new Album
 				{
 					Title = newLibraryAlbum.Title,
 					Year = newLibraryAlbum.Year!.Value, // Not technically required by subsonic but required by us
-					SubsonicId = newLibraryAlbum.SubsonicId,
+					ExternalIds = ExternalIdsFor(newLibraryAlbum.Id, newLibraryAlbum.MusicBrainzId, albumsById),
 					IsCompilation = newLibraryAlbum.IsCompilation,
 					Artists = albumArtists
 				};
 
 				newCatalogueAlbums.Add(album);
+				foreach (var externalId in album.ExternalIds)
+				{
+					albumsById[externalId] = album;
+				}
 			}
 			catch (Exception)
 			{
@@ -86,5 +106,22 @@ public class SyncLibrary(ICatalogue catalogue, ILibrarySource librarySource)
 		}
 
 		return new SyncLibraryResponse(newCatalogueArtists, newCatalogueAlbums, failedToProcess);
+	}
+
+	private static Dictionary<ExternalId, T> IndexByExternalId<T>(IEnumerable<T> entities, Func<T, IEnumerable<ExternalId>> externalIds)
+	{
+		return entities
+			.SelectMany(entity => externalIds(entity).Select(externalId => (ExternalId: externalId, Entity: entity)))
+			.ToDictionary(pair => pair.ExternalId, pair => pair.Entity);
+	}
+
+	private static IReadOnlyList<ExternalId> ExternalIdsFor<T>(ExternalId sourceId, MusicBrainzId? musicBrainzId, IReadOnlyDictionary<ExternalId, T> taken)
+	{
+		if (musicBrainzId is null || taken.ContainsKey(musicBrainzId))
+		{
+			return [sourceId];
+		}
+
+		return [sourceId, musicBrainzId];
 	}
 }

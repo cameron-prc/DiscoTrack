@@ -38,6 +38,7 @@ public class SubsonicClientTests
 		Assert.Null(legacy.Artists);
 		Assert.Equal("1TeigLa2FBy3jtyksTv2y6", legacy.ArtistId);
 		Assert.Equal("The Checks", legacy.Artist);
+		Assert.Equal("3736e21d-c00c-4b11-bdd5-8e2e1e3ee967", page.Single(a => a.Name == "Nightmare").MusicBrainzId);
 	}
 
 	[Fact]

@@ -9,4 +9,5 @@ public sealed record AlbumID3
 	public string? ArtistId { get; init; }
 	public string? Artist { get; init; }
 	public IReadOnlyList<ArtistID3>? Artists { get; init; }
+	public string? MusicBrainzId { get; init; }
 }

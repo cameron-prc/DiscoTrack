@@ -1,3 +1,5 @@
+using DiscoTrack.Core.ExternalIds;
+
 namespace DiscoTrack.Core.Library;
 
-public record LibraryArtist(string SubsonicId, string Name, string? MusicBrainzId = null);
+public record LibraryArtist(ExternalId Id, string Name, MusicBrainzId? MusicBrainzId = null);

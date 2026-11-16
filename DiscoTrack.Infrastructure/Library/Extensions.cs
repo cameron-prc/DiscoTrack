@@ -1,3 +1,4 @@
+using DiscoTrack.Core.ExternalIds;
 using DiscoTrack.Core.Library;
 using DiscoTrack.Infrastructure.Clients.Subsonic;
 using DiscoTrack.Infrastructure.Clients.Subsonic.Models;
@@ -8,13 +9,23 @@ internal static class Extensions
 {
 	public static LibraryAlbum ToLibraryAlbum(this AlbumID3 album)
 	{
-		return new(album.Id, album.Name, album.Year, album.IsCompilation, album.Credits().Select(a => a.ToLibraryArtist()).ToList());
+		var artists = album.Credits().Select(a => a.ToLibraryArtist()).ToList();
+
+		return new(new SubsonicId(album.Id), album.Name, album.Year, album.IsCompilation, artists, ToMusicBrainzId(album.MusicBrainzId));
 	}
 
 	public static LibraryArtist ToLibraryArtist(this ArtistID3 artist)
 	{
-		var musicBrainzId = string.IsNullOrEmpty(artist.MusicBrainzId) ? null : artist.MusicBrainzId;
+		return new(new SubsonicId(artist.Id), artist.Name, ToMusicBrainzId(artist.MusicBrainzId));
+	}
 
-		return new(artist.Id, artist.Name, musicBrainzId);
+	private static MusicBrainzId? ToMusicBrainzId(string? value)
+	{
+		if (string.IsNullOrEmpty(value))
+		{
+			return null;
+		}
+
+		return new MusicBrainzId(value);
 	}
 }

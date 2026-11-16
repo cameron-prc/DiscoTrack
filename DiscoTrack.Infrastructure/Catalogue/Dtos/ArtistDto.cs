@@ -5,6 +5,5 @@ namespace DiscoTrack.Infrastructure.Catalogue.Dtos;
 internal sealed class ArtistDto
 {
 	public ArtistId Id { get; init; }
-	public string? SubsonicId { get; init; }
 	public required string Name { get; init; }
 }

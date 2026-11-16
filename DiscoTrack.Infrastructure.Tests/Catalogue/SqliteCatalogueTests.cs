@@ -1,5 +1,6 @@
 using DiscoTrack.Core.Albums;
 using DiscoTrack.Core.Artists;
+using DiscoTrack.Core.ExternalIds;
 using DiscoTrack.Infrastructure.Catalogue;
 using DiscoTrack.Infrastructure.Sqlite;
 using DiscoTrack.Infrastructure.Sqlite.Migrations;
@@ -50,7 +51,7 @@ public sealed class SqliteCatalogueTests : IDisposable
 		var artists = await _catalogue.GetArtists(CancellationToken.None);
 
 		Assert.Equal(["Puscifer", "Tool"], artists.Select(a => a.Name));
-		Assert.Equal(["art-puscifer", "art-tool"], artists.Select(a => a.SubsonicId));
+		Assert.Equal([new SubsonicId("art-puscifer"), new SubsonicId("art-tool")], artists.SelectMany(a => a.ExternalIds));
 		Assert.Equal([puscifer.Id, tool.Id], artists.Select(a => a.Id));
 	}
 
@@ -68,12 +69,12 @@ public sealed class SqliteCatalogueTests : IDisposable
 	}
 
 	[Fact]
-	public async Task AddArtists_saves_an_artist_without_a_subsonic_id()
+	public async Task AddArtists_saves_an_artist_without_external_ids()
 	{
 		await _catalogue.AddArtists([new Artist { Name = "Shihad" }], CancellationToken.None);
 
 		var artist = Assert.Single(await _catalogue.GetArtists(CancellationToken.None));
-		Assert.Null(artist.SubsonicId);
+		Assert.Empty(artist.ExternalIds);
 		Assert.Equal("Shihad", artist.Name);
 	}
 
@@ -88,12 +89,34 @@ public sealed class SqliteCatalogueTests : IDisposable
 	}
 
 	[Fact]
-	public async Task AddArtists_rejects_a_different_artist_with_the_same_subsonic_id()
+	public async Task AddArtists_rejects_a_different_artist_with_the_same_external_id()
 	{
 		await _catalogue.AddArtists([Artist("art-tool", "Tool")], CancellationToken.None);
 
 		await Assert.ThrowsAsync<SqliteException>(
 			() => _catalogue.AddArtists([Artist("art-tool", "Tool again")], CancellationToken.None));
+	}
+
+	[Fact]
+	public async Task GetArtists_returns_every_external_id_of_an_artist()
+	{
+		var tool = new Artist { ExternalIds = [new SubsonicId("art-tool"), new SubsonicId("art-tool-dupe"), new MusicBrainzId("mb-tool")], Name = "Tool" };
+		await _catalogue.AddArtists([tool], CancellationToken.None);
+
+		var artist = Assert.Single(await _catalogue.GetArtists(CancellationToken.None));
+
+		Assert.Equivalent(tool.ExternalIds, artist.ExternalIds);
+	}
+
+	[Fact]
+	public async Task AddArtists_allows_the_same_value_under_different_providers()
+	{
+		await _catalogue.AddArtists([
+			new Artist { ExternalIds = [new SubsonicId("shared")], Name = "Tool" },
+			new Artist { ExternalIds = [new MusicBrainzId("shared")], Name = "Puscifer" },
+		], CancellationToken.None);
+
+		Assert.Equal(2, (await _catalogue.GetArtists(CancellationToken.None)).Count);
 	}
 
 	[Fact]
@@ -123,7 +146,7 @@ public sealed class SqliteCatalogueTests : IDisposable
 		await _catalogue.AddArtists([tool, puscifer], CancellationToken.None);
 		var split = new Album
 		{
-			SubsonicId = "alb-split",
+			ExternalIds = [new SubsonicId("alb-split"), new MusicBrainzId("mb-split")],
 			Title = "Split",
 			Year = 2010,
 			IsCompilation = false,
@@ -134,14 +157,14 @@ public sealed class SqliteCatalogueTests : IDisposable
 		var album = Assert.Single(await _catalogue.GetAlbums(CancellationToken.None));
 
 		Assert.Equal(split.Id, album.Id);
-		Assert.Equal("alb-split", album.SubsonicId);
+		Assert.Equal([new SubsonicId("alb-split"), new MusicBrainzId("mb-split")], album.ExternalIds);
 		Assert.Equal("Split", album.Title);
 		Assert.Equal(2010, album.Year);
 		Assert.False(album.IsCompilation);
 		Assert.Equal([1, 2], album.Artists.Select(a => a.Position));
 		Assert.Equal(["Tool", "Puscifer"], album.Artists.Select(a => a.Artist.Name));
 		Assert.Equal([tool.Id, puscifer.Id], album.Artists.Select(a => a.Artist.Id));
-		Assert.Equal(["art-tool", "art-puscifer"], album.Artists.Select(a => a.Artist.SubsonicId));
+		Assert.Equal([new SubsonicId("art-tool"), new SubsonicId("art-puscifer")], album.Artists.SelectMany(a => a.Artist.ExternalIds));
 		Assert.Equal("Tool", album.PrimaryArtist()?.Name);
 	}
 
@@ -169,7 +192,7 @@ public sealed class SqliteCatalogueTests : IDisposable
 		await _catalogue.AddAlbums([new Album { Title = "Wanted", Year = 1999 }], CancellationToken.None);
 
 		var album = Assert.Single(await _catalogue.GetAlbums(CancellationToken.None));
-		Assert.Null(album.SubsonicId);
+		Assert.Empty(album.ExternalIds);
 		Assert.Empty(album.Artists);
 	}
 
@@ -202,6 +225,24 @@ public sealed class SqliteCatalogueTests : IDisposable
 
 		Assert.Equal(["Tool", "Puscifer"], album.Artists.Select(a => a.Artist.Name));
 		Assert.Equal("Tool", album.PrimaryArtist()?.Name);
+	}
+
+	[Fact]
+	public async Task GetArtistAlbums_returns_external_ids_of_the_album_and_every_credit()
+	{
+		var tool = Artist("art-tool", "Tool");
+		var puscifer = Artist("art-puscifer", "Puscifer");
+		var shihad = Artist("art-shihad", "Shihad");
+		await _catalogue.AddArtists([tool, puscifer, shihad], CancellationToken.None);
+		await _catalogue.AddAlbums([
+			Album("alb-split", "Split", 2010, Credit(tool, 1), Credit(puscifer, 2)),
+			Album("alb-killjoy", "Killjoy", 1995, Credit(shihad, 1)),
+		], CancellationToken.None);
+
+		var album = Assert.Single(await _catalogue.GetArtistAlbums(puscifer.Id, CancellationToken.None));
+
+		Assert.Equal([new SubsonicId("alb-split")], album.ExternalIds);
+		Assert.Equal([new SubsonicId("art-tool"), new SubsonicId("art-puscifer")], album.Artists.SelectMany(a => a.Artist.ExternalIds));
 	}
 
 	[Fact]
@@ -240,6 +281,17 @@ public sealed class SqliteCatalogueTests : IDisposable
 	}
 
 	[Fact]
+	public async Task AddAlbums_rejects_a_different_album_with_the_same_external_id()
+	{
+		await _catalogue.AddAlbums([Album("alb-1", "Salival", 2000)], CancellationToken.None);
+
+		await Assert.ThrowsAsync<SqliteException>(
+			() => _catalogue.AddAlbums([Album("alb-1", "Salival again", 2000)], CancellationToken.None));
+
+		Assert.Equal(["Salival"], (await _catalogue.GetAlbums(CancellationToken.None)).Select(a => a.Title));
+	}
+
+	[Fact]
 	public async Task AddAlbums_rolls_back_the_whole_batch_when_one_row_fails()
 	{
 		await _catalogue.AddAlbums([Album("alb-1", "Salival", 2000)], CancellationToken.None);
@@ -260,7 +312,7 @@ public sealed class SqliteCatalogueTests : IDisposable
 		await _catalogue.AddArtists([various], CancellationToken.None);
 		await _catalogue.AddAlbums([new Album
 		{
-			SubsonicId = "alb-natures-best",
+			ExternalIds = [new SubsonicId("alb-natures-best")],
 			Title = "Nature's Best",
 			Year = 2002,
 			IsCompilation = true,
@@ -274,7 +326,7 @@ public sealed class SqliteCatalogueTests : IDisposable
 
 	private static Artist Artist(string subsonicId, string name)
 	{
-		return new Artist { SubsonicId = subsonicId, Name = name };
+		return new Artist { ExternalIds = [new SubsonicId(subsonicId)], Name = name };
 	}
 
 	private static AlbumArtist Credit(Artist artist, int position)
@@ -284,6 +336,6 @@ public sealed class SqliteCatalogueTests : IDisposable
 
 	private static Album Album(string subsonicId, string title, int year, params AlbumArtist[] credits)
 	{
-		return new Album { SubsonicId = subsonicId, Title = title, Year = year, Artists = credits };
+		return new Album { ExternalIds = [new SubsonicId(subsonicId)], Title = title, Year = year, Artists = credits };
 	}
 }

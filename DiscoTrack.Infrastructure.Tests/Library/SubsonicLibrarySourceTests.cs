@@ -1,3 +1,4 @@
+using DiscoTrack.Core.ExternalIds;
 using DiscoTrack.Core.Library;
 using DiscoTrack.Infrastructure.Clients.Subsonic;
 using DiscoTrack.Infrastructure.Clients.Subsonic.Models;
@@ -22,7 +23,7 @@ public class SubsonicLibrarySourceTests
 
 		var albums = await Source(pageSize: 2).GetAlbums(CancellationToken.None);
 
-		Assert.Equal(["1", "2", "3", "4", "5"], albums.Select(a => a.SubsonicId));
+		Assert.Equal(["1", "2", "3", "4", "5"], albums.Select(a => a.Id.Value));
 		Assert.Equal([(2, 0), (2, 2), (2, 4)], _client.AlbumRequests);
 	}
 
@@ -61,11 +62,11 @@ public class SubsonicLibrarySourceTests
 
 		var album = (await Source().GetAlbums(CancellationToken.None)).Single();
 
-		Assert.Equal("alb-split", album.SubsonicId);
+		Assert.Equal(new SubsonicId("alb-split"), album.Id);
 		Assert.Equal("Split", album.Title);
 		Assert.Equal(2010, album.Year);
 		Assert.False(album.IsCompilation);
-		Assert.Equal([new LibraryArtist("art-tool", "Tool"), new LibraryArtist("art-puscifer", "Puscifer")], album.Artists);
+		Assert.Equal([new LibraryArtist(new SubsonicId("art-tool"), "Tool"), new LibraryArtist(new SubsonicId("art-puscifer"), "Puscifer")], album.Artists);
 	}
 
 	[Fact]
@@ -75,7 +76,7 @@ public class SubsonicLibrarySourceTests
 
 		var album = (await Source().GetAlbums(CancellationToken.None)).Single();
 
-		Assert.Equal([new LibraryArtist("art-checks", "The Checks")], album.Artists);
+		Assert.Equal([new LibraryArtist(new SubsonicId("art-checks"), "The Checks")], album.Artists);
 	}
 
 	[Fact]
@@ -86,6 +87,26 @@ public class SubsonicLibrarySourceTests
 		var album = (await Source().GetAlbums(CancellationToken.None)).Single();
 
 		Assert.Null(album.Year);
+	}
+
+	[Fact]
+	public async Task GetAlbums_maps_the_musicbrainz_id()
+	{
+		_client.Albums = [new AlbumID3 { Id = "alb-nightmare", Name = "Nightmare", MusicBrainzId = "3736e21d-c00c-4b11-bdd5-8e2e1e3ee967" }];
+
+		var album = (await Source().GetAlbums(CancellationToken.None)).Single();
+
+		Assert.Equal(new MusicBrainzId("3736e21d-c00c-4b11-bdd5-8e2e1e3ee967"), album.MusicBrainzId);
+	}
+
+	[Fact]
+	public async Task GetAlbums_reports_an_untagged_musicbrainz_id_as_null()
+	{
+		_client.Albums = [new AlbumID3 { Id = "alb-untagged", Name = "Untagged", MusicBrainzId = "" }];
+
+		var album = (await Source().GetAlbums(CancellationToken.None)).Single();
+
+		Assert.Null(album.MusicBrainzId);
 	}
 
 	[Fact]
@@ -109,7 +130,7 @@ public class SubsonicLibrarySourceTests
 
 		var artist = (await Source().GetArtists(CancellationToken.None)).Single();
 
-		Assert.Equal(new LibraryArtist("art-puscifer", "Puscifer", "6e4277d8-7b64-44a3-b823-13bd15114e22"), artist);
+		Assert.Equal(new LibraryArtist(new SubsonicId("art-puscifer"), "Puscifer", new MusicBrainzId("6e4277d8-7b64-44a3-b823-13bd15114e22")), artist);
 	}
 
 	[Fact]
