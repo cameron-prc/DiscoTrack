@@ -1,4 +1,5 @@
 @page "/artists/{Id:guid}"
+@using DiscoTrack.Core.ExternalIds
 @inject ICatalogue Catalogue
 
 @if (_loading)
@@ -15,7 +16,14 @@ else
 {
 	<PageTitle>@_artist.Name</PageTitle>
 	<h1>@_artist.Name</h1>
-	<p>count: @_albums.Count</p>
+	<ul>
+		<li>local: @_artist.Id</li>
+		@foreach (var externalId in _artist.ExternalIds)
+		{
+			<li>@externalId.Provider: @externalId.Value</li>
+		}
+	</ul>
+	<p>Album Count: @_albums.Count</p>
 	<table>
 		<thead>
 			<tr>
@@ -42,6 +50,7 @@ else
 	private bool _loading = true;
 	private Artist? _artist;
 	private IReadOnlyList<Album> _albums = [];
+	private IReadOnlyList<ExternalId> _externalIds = [];
 
 	protected override async Task OnInitializedAsync()
 	{
