@@ -19,13 +19,16 @@ public sealed class MigratorTests : IDisposable
 	[Fact]
 	public void Migrate_applies_every_script_and_reports_them()
 	{
+		var scripts = typeof(Migrator).Assembly
+			.GetManifestResourceNames()
+			.Where(name => name.EndsWith(".sql"))
+			.Order(StringComparer.Ordinal)
+			.ToList();
+
 		var applied = Migrator.Migrate(_db.ConnectionString);
 
-		Assert.Equal(new[]
-		{
-			"DiscoTrack.Infrastructure.Sqlite.Migrations.0001_create_library_tables.sql",
-			"DiscoTrack.Infrastructure.Sqlite.Migrations.0002_move_subsonic_ids_to_external_ids.sql",
-		}, applied);
+		Assert.NotEmpty(scripts);
+		Assert.Equal(scripts, applied);
 		Assert.True(Migrator.IsUpToDate(_db.ConnectionString));
 	}
 
