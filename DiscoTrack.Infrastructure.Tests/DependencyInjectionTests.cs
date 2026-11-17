@@ -1,10 +1,10 @@
-using DiscoTrack.Core.Catalogue;
-using DiscoTrack.Core.Jobs;
-using DiscoTrack.Infrastructure.Clients.Subsonic;
+using DiscoTrack.Catalogue;
 using DiscoTrack.Infrastructure.Catalogue;
+using DiscoTrack.Infrastructure.Clients.Subsonic;
 using DiscoTrack.Infrastructure.Jobs;
 using DiscoTrack.Infrastructure.Sqlite;
 using DiscoTrack.Infrastructure.Tests.Clients.Subsonic;
+using DiscoTrack.Jobs;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;

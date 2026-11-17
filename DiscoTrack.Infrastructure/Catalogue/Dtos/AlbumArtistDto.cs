@@ -1,4 +1,4 @@
-using DiscoTrack.Core.Artists;
+using DiscoTrack.Artists;
 
 namespace DiscoTrack.Infrastructure.Catalogue.Dtos;
 

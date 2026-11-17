@@ -1,6 +1,6 @@
-using DiscoTrack.Core.Library;
 using DiscoTrack.Infrastructure.Clients.Subsonic;
 using DiscoTrack.Infrastructure.Clients.Subsonic.Models;
+using DiscoTrack.Library;
 using Microsoft.Extensions.Options;
 
 namespace DiscoTrack.Infrastructure.Library;

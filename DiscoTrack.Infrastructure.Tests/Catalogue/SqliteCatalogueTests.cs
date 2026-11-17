@@ -1,6 +1,6 @@
-using DiscoTrack.Core.Albums;
-using DiscoTrack.Core.Artists;
-using DiscoTrack.Core.ExternalIds;
+using DiscoTrack.Albums;
+using DiscoTrack.Artists;
+using DiscoTrack.ExternalIds;
 using DiscoTrack.Infrastructure.Catalogue;
 using DiscoTrack.Infrastructure.Sqlite;
 using DiscoTrack.Infrastructure.Sqlite.Migrations;

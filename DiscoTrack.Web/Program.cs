@@ -1,4 +1,4 @@
-using DiscoTrack.Core;
+using DiscoTrack;
 using DiscoTrack.Infrastructure;
 using DiscoTrack.Infrastructure.Sqlite;
 using DiscoTrack.Infrastructure.Sqlite.Migrations;

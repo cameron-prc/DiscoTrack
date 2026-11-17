@@ -1,9 +1,9 @@
-using DiscoTrack.Core.ExternalIds;
-using DiscoTrack.Core.Library;
+using DiscoTrack.ExternalIds;
 using DiscoTrack.Infrastructure.Clients.Subsonic;
 using DiscoTrack.Infrastructure.Clients.Subsonic.Models;
 using DiscoTrack.Infrastructure.Library;
 using DiscoTrack.Infrastructure.Tests.Clients.Subsonic;
+using DiscoTrack.Library;
 
 namespace DiscoTrack.Infrastructure.Tests.Library;
 

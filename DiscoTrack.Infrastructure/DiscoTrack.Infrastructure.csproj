@@ -11,7 +11,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\DiscoTrack.Core\DiscoTrack.Core.csproj" />
+    <ProjectReference Include="..\DiscoTrack\DiscoTrack.csproj" />
   </ItemGroup>
 
   <ItemGroup>

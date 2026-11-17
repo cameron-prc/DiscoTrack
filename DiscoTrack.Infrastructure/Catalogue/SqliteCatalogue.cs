@@ -1,7 +1,7 @@
 using Dapper;
-using DiscoTrack.Core.Albums;
-using DiscoTrack.Core.Artists;
-using DiscoTrack.Core.Catalogue;
+using DiscoTrack.Albums;
+using DiscoTrack.Artists;
+using DiscoTrack.Catalogue;
 using DiscoTrack.Infrastructure.Catalogue.Dtos;
 using DiscoTrack.Infrastructure.Sqlite;
 using Microsoft.Data.Sqlite;

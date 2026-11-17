@@ -1,5 +1,5 @@
 using System.Threading.Channels;
-using DiscoTrack.Core.Jobs;
+using DiscoTrack.Jobs;
 
 namespace DiscoTrack.Infrastructure.Jobs;
 

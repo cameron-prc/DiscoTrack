@@ -1,7 +1,7 @@
 using System.Threading.Channels;
-using DiscoTrack.Core.Jobs;
-using DiscoTrack.Core.Jobs.JobHandlers;
 using DiscoTrack.Infrastructure.Jobs;
+using DiscoTrack.Jobs;
+using DiscoTrack.Jobs.JobHandlers;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;

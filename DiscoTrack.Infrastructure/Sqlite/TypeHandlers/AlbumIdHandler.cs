@@ -1,6 +1,6 @@
 using System.Data;
 using Dapper;
-using DiscoTrack.Core.Albums;
+using DiscoTrack.Albums;
 
 namespace DiscoTrack.Infrastructure.Sqlite.TypeHandlers;
 

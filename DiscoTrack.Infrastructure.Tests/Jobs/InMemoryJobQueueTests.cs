@@ -1,5 +1,5 @@
-using DiscoTrack.Core.Jobs;
 using DiscoTrack.Infrastructure.Jobs;
+using DiscoTrack.Jobs;
 
 namespace DiscoTrack.Infrastructure.Tests.Jobs;
 

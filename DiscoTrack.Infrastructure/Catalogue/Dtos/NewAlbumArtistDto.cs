@@ -1,5 +1,5 @@
-using DiscoTrack.Core.Albums;
-using DiscoTrack.Core.Artists;
+using DiscoTrack.Albums;
+using DiscoTrack.Artists;
 
 namespace DiscoTrack.Infrastructure.Catalogue.Dtos;
 
