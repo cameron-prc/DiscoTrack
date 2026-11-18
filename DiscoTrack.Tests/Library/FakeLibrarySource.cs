@@ -1,3 +1,4 @@
+using DiscoTrack.ExternalIds;
 using DiscoTrack.Library;
 
 namespace DiscoTrack.Tests.Library;
@@ -8,6 +9,11 @@ internal sealed class FakeLibrarySource : ILibrarySource
 	public List<LibraryArtist> Artists { get; } = [];
 	public List<string> Calls { get; } = [];
 	public string? FailingMethod { get; set; }
+
+	public Provider Provider
+	{
+		get { return Provider.Subsonic; }
+	}
 
 	public Task<IReadOnlyList<LibraryAlbum>> GetAlbums(CancellationToken ct)
 	{

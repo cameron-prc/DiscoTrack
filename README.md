@@ -23,3 +23,6 @@ dotnet run --project DiscoTrack.Web
 The database is created on first run.
 
 Migrations are run automatically on each app start.
+
+## TODO
+- Handle library orphans correctly

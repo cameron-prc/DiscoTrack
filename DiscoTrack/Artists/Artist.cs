@@ -8,11 +8,20 @@ public class Artist
 	public IReadOnlyList<ExternalId> ExternalIds { get; set; } = [];
 	public required string Name { get; set; }
 
-	public void SetExternalId(ExternalId externalId)
+	public void SetExternalIds(IReadOnlyCollection<ExternalId> externalIds)
+	{
+		var providers = externalIds.Select(externalId => externalId.Provider).ToHashSet();
+
+		ExternalIds = ExternalIds
+			.Where(existing => !providers.Contains(existing.Provider) || externalIds.Contains(existing))
+			.Concat(externalIds.Except(ExternalIds))
+			.ToList();
+	}
+
+	public void RemoveExternalIds(Provider provider)
 	{
 		ExternalIds = ExternalIds
-			.Where(existing => existing.Provider != externalId.Provider)
-			.Append(externalId)
+			.Where(existing => existing.Provider != provider)
 			.ToList();
 	}
 

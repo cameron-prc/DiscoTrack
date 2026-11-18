@@ -163,9 +163,77 @@ public class SyncLibraryTests
 
 		var artist = Assert.Single(_catalogue.Artists);
 		Assert.Equal("Wolf Alice", artist.Name);
-		Assert.Equal([new SubsonicId("art-wolf-alice"), new MusicBrainzId("mb-wolf-alice")], artist.ExternalIds);
+		Assert.Equal([new SubsonicId("art-wolf-alice"), new MusicBrainzId("mb-wolf-alice"), new SubsonicId("art-wolf-alce")], artist.ExternalIds);
 		Assert.Equal(["My Love Is Cool", "Visions of a Life"], _catalogue.Albums.Select(a => a.Title));
 		Assert.All(_catalogue.Albums, album => Assert.Same(artist, Assert.Single(album.Artists).Artist));
+	}
+
+	[Fact]
+	public async Task A_second_run_over_artists_and_albums_sharing_a_musicbrainz_id_saves_nothing()
+	{
+		var wolfAlice = new LibraryArtist(new SubsonicId("art-wolf-alice"), "Wolf Alice", new MusicBrainzId("mb-wolf-alice"));
+		var wolfAlce = new LibraryArtist(new SubsonicId("art-wolf-alce"), "Wolf Alce", new MusicBrainzId("mb-wolf-alice"));
+		_source.Albums.AddRange([
+			Album("alb-visions", "Visions of a Life", 2017, wolfAlice) with { MusicBrainzId = new MusicBrainzId("mb-visions") },
+			Album("alb-visions-rip", "Visions of a Life", 2017, wolfAlce) with { MusicBrainzId = new MusicBrainzId("mb-visions") },
+		]);
+		await Sync().Run(CancellationToken.None);
+		_catalogue.Calls.Clear();
+
+		var result = await Sync().Run(CancellationToken.None);
+
+		Assert.Empty(result.GetRight.Artists);
+		Assert.Empty(result.GetRight.Albums);
+		Assert.Equal([nameof(FakeCatalogue.GetArtists), nameof(FakeCatalogue.GetAlbums)], _catalogue.Calls);
+		Assert.Equal(
+			[new SubsonicId("art-wolf-alice"), new MusicBrainzId("mb-wolf-alice"), new SubsonicId("art-wolf-alce")],
+			Assert.Single(_catalogue.Artists).ExternalIds);
+		Assert.Equal(
+			[new SubsonicId("alb-visions"), new MusicBrainzId("mb-visions"), new SubsonicId("alb-visions-rip")],
+			Assert.Single(_catalogue.Albums).ExternalIds);
+	}
+
+	[Fact]
+	public async Task Adds_a_duplicate_library_id_to_the_catalogue_entity_without_dropping_the_one_it_has()
+	{
+		var tool = new Artist { ExternalIds = [new SubsonicId("art-tool"), new MusicBrainzId("mb-tool")], Name = "Tool" };
+		var lateralus = new Album { ExternalIds = [new SubsonicId("alb-lateralus"), new MusicBrainzId("mb-lateralus")], Title = "Lateralus", Year = 2001 };
+		_catalogue.Artists.Add(tool);
+		_catalogue.Albums.Add(lateralus);
+		var toolAgain = Tool with { Id = new SubsonicId("art-tool-again") };
+		_source.Albums.AddRange([
+			Album("alb-lateralus", "Lateralus", 2001, Tool) with { MusicBrainzId = new MusicBrainzId("mb-lateralus") },
+			Album("alb-lateralus-rip", "Lateralus", 2001, toolAgain) with { MusicBrainzId = new MusicBrainzId("mb-lateralus") },
+		]);
+
+		var result = await Sync().Run(CancellationToken.None);
+
+		Assert.Equal([tool], result.GetRight.Artists);
+		Assert.Equal([lateralus], result.GetRight.Albums);
+		Assert.Equal([new SubsonicId("art-tool"), new MusicBrainzId("mb-tool"), new SubsonicId("art-tool-again")], tool.ExternalIds);
+		Assert.Equal([new SubsonicId("alb-lateralus"), new MusicBrainzId("mb-lateralus"), new SubsonicId("alb-lateralus-rip")], lateralus.ExternalIds);
+	}
+
+	[Fact]
+	public async Task Saves_only_the_catalogue_entities_whose_ids_changed()
+	{
+		var tool = new Artist { ExternalIds = [new SubsonicId("art-tool"), new MusicBrainzId("mb-tool")], Name = "Tool" };
+		var shihad = new Artist { ExternalIds = [new SubsonicId("art-shihad-old"), new MusicBrainzId("mb-shihad")], Name = "Shihad" };
+		_catalogue.Artists.AddRange([tool, shihad]);
+		_catalogue.Albums.Add(new Album { ExternalIds = [new SubsonicId("alb-lateralus")], Title = "Lateralus", Year = 2001 });
+		_catalogue.Albums.Add(new Album { ExternalIds = [new SubsonicId("alb-killjoy")], Title = "Killjoy", Year = 1995 });
+		_source.Albums.AddRange([
+			Album("alb-lateralus", "Lateralus", 2001, Tool),
+			Album("alb-killjoy", "Killjoy", 1995, Shihad),
+		]);
+
+		var result = await Sync().Run(CancellationToken.None);
+
+		Assert.Equal([shihad], result.GetRight.Artists);
+		Assert.Empty(result.GetRight.Albums);
+		Assert.Equal([new MusicBrainzId("mb-shihad"), new SubsonicId("art-shihad")], shihad.ExternalIds);
+		Assert.Single(_catalogue.Calls, call => call == nameof(FakeCatalogue.SaveArtist));
+		Assert.DoesNotContain(nameof(FakeCatalogue.SaveAlbum), _catalogue.Calls);
 	}
 
 	[Fact]
@@ -179,6 +247,70 @@ public class SyncLibraryTests
 
 		Assert.Same(odelay, Assert.Single(_catalogue.Albums));
 		Assert.Equal([new MusicBrainzId("mb-odelay"), new SubsonicId("alb-odelay-rip")], odelay.ExternalIds);
+	}
+
+	[Fact]
+	public async Task Removes_the_library_ids_of_artists_and_albums_no_longer_in_the_library_and_keeps_them_in_the_catalogue()
+	{
+		var tool = new Artist { ExternalIds = [new SubsonicId("art-tool"), new MusicBrainzId("mb-tool")], Name = "Tool" };
+		var lateralus = new Album { ExternalIds = [new SubsonicId("alb-lateralus"), new MusicBrainzId("mb-lateralus")], Title = "Lateralus", Year = 2001 };
+		var checks = new Artist { ExternalIds = [new SubsonicId("art-checks")], Name = "The Checks" };
+		var huntingWhales = new Album { ExternalIds = [new SubsonicId("alb-hunting-whales")], Title = "Hunting Whales", Year = 2007 };
+		_catalogue.Artists.AddRange([tool, checks]);
+		_catalogue.Albums.AddRange([lateralus, huntingWhales]);
+		_source.Albums.Add(Album("alb-hunting-whales", "Hunting Whales", 2007, TheChecks));
+
+		var result = await Sync().Run(CancellationToken.None);
+
+		Assert.Equal([tool], result.GetRight.Artists);
+		Assert.Equal([lateralus], result.GetRight.Albums);
+		Assert.Equal([new MusicBrainzId("mb-tool")], tool.ExternalIds);
+		Assert.Equal([new MusicBrainzId("mb-lateralus")], lateralus.ExternalIds);
+		Assert.Equal([tool, checks], _catalogue.Artists);
+		Assert.Equal([lateralus, huntingWhales], _catalogue.Albums);
+	}
+
+	[Fact]
+	public async Task Leaves_catalogue_entities_that_hold_no_library_id_alone()
+	{
+		_catalogue.Artists.Add(new Artist { ExternalIds = [new MusicBrainzId("mb-tool")], Name = "Tool" });
+		_catalogue.Albums.Add(new Album { ExternalIds = [new MusicBrainzId("mb-lateralus")], Title = "Lateralus", Year = 2001 });
+		_source.Albums.Add(Album("alb-hunting-whales", "Hunting Whales", 2007, TheChecks));
+
+		var result = await Sync().Run(CancellationToken.None);
+
+		Assert.Equal(["The Checks"], result.GetRight.Artists.Select(a => a.Name));
+		Assert.Equal(["Hunting Whales"], result.GetRight.Albums.Select(a => a.Title));
+	}
+
+	[Fact]
+	public async Task A_second_run_after_removing_library_ids_saves_nothing()
+	{
+		_catalogue.Artists.Add(new Artist { ExternalIds = [new SubsonicId("art-tool")], Name = "Tool" });
+		_catalogue.Albums.Add(new Album { ExternalIds = [new SubsonicId("alb-lateralus")], Title = "Lateralus", Year = 2001 });
+		_source.Albums.Add(Album("alb-hunting-whales", "Hunting Whales", 2007, TheChecks));
+		await Sync().Run(CancellationToken.None);
+		_catalogue.Calls.Clear();
+
+		await Sync().Run(CancellationToken.None);
+
+		Assert.Equal([nameof(FakeCatalogue.GetArtists), nameof(FakeCatalogue.GetAlbums)], _catalogue.Calls);
+	}
+
+	[Fact]
+	public async Task An_empty_library_removes_every_library_id()
+	{
+		var tool = new Artist { ExternalIds = [new SubsonicId("art-tool"), new MusicBrainzId("mb-tool")], Name = "Tool" };
+		var lateralus = new Album { ExternalIds = [new SubsonicId("alb-lateralus")], Title = "Lateralus", Year = 2001 };
+		_catalogue.Artists.Add(tool);
+		_catalogue.Albums.Add(lateralus);
+
+		var result = await Sync().Run(CancellationToken.None);
+
+		Assert.Equal([tool], result.GetRight.Artists);
+		Assert.Equal([lateralus], result.GetRight.Albums);
+		Assert.Equal([new MusicBrainzId("mb-tool")], tool.ExternalIds);
+		Assert.Empty(lateralus.ExternalIds);
 	}
 
 	[Fact]

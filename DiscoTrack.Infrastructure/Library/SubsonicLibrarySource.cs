@@ -1,3 +1,4 @@
+using DiscoTrack.ExternalIds;
 using DiscoTrack.Infrastructure.Clients.Subsonic;
 using DiscoTrack.Infrastructure.Clients.Subsonic.Models;
 using DiscoTrack.Library;
@@ -8,6 +9,11 @@ namespace DiscoTrack.Infrastructure.Library;
 public class SubsonicLibrarySource(ISubsonicClient client, IOptions<SubsonicOptions> options) : ILibrarySource
 {
 	private readonly int _pageSize = options.Value.PageSize;
+
+	public Provider Provider
+	{
+		get { return Provider.Subsonic; }
+	}
 
 	public async Task<IReadOnlyList<LibraryAlbum>> GetAlbums(CancellationToken ct)
 	{

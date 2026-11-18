@@ -45,23 +45,33 @@ public class AlbumTests
 	}
 
 	[Fact]
-	public void SetExternalId_adds_an_id_from_a_provider_the_album_does_not_have()
+	public void SetExternalIds_adds_an_id_from_a_provider_the_album_does_not_have()
 	{
 		var album = new Album { ExternalIds = [new SubsonicId("alb-lateralus")], Title = "Lateralus", Year = 2001 };
 
-		album.SetExternalId(new MusicBrainzId("mb-lateralus"));
+		album.SetExternalIds([new MusicBrainzId("mb-lateralus")]);
 
 		Assert.Equal([new SubsonicId("alb-lateralus"), new MusicBrainzId("mb-lateralus")], album.ExternalIds);
 	}
 
 	[Fact]
-	public void SetExternalId_replaces_the_id_from_the_same_provider()
+	public void SetExternalIds_replaces_the_ids_from_the_same_provider()
 	{
 		var album = new Album { ExternalIds = [new SubsonicId("alb-lateralus"), new MusicBrainzId("mb-lateralus")], Title = "Lateralus", Year = 2001 };
 
-		album.SetExternalId(new SubsonicId("alb-lateralus-rescanned"));
+		album.SetExternalIds([new SubsonicId("alb-lateralus-rescanned")]);
 
 		Assert.Equal([new MusicBrainzId("mb-lateralus"), new SubsonicId("alb-lateralus-rescanned")], album.ExternalIds);
+	}
+
+	[Fact]
+	public void SetExternalIds_holds_several_ids_from_one_provider()
+	{
+		var album = new Album { ExternalIds = [new SubsonicId("alb-lateralus"), new MusicBrainzId("mb-lateralus")], Title = "Lateralus", Year = 2001 };
+
+		album.SetExternalIds([new SubsonicId("alb-lateralus"), new SubsonicId("alb-lateralus-dupe")]);
+
+		Assert.Equal([new SubsonicId("alb-lateralus"), new MusicBrainzId("mb-lateralus"), new SubsonicId("alb-lateralus-dupe")], album.ExternalIds);
 	}
 
 	[Fact]
