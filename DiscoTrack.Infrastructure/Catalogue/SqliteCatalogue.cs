@@ -54,13 +54,25 @@ public class SqliteCatalogue(IOptions<SqliteOptions> options) : ICatalogue
 		)
 		""";
 
-	private const string InsertArtist = "INSERT INTO Artists (Id, Name) VALUES (@Id, @Name)";
+	private const string UpsertArtist = """
+		INSERT INTO Artists (Id, Name) VALUES (@Id, @Name)
+		ON CONFLICT (Id) DO UPDATE SET Name = excluded.Name
+		""";
+
+	private const string DeleteArtistExternalIds = "DELETE FROM ArtistExternalIds WHERE ArtistId = @Id";
 
 	private const string InsertArtistExternalId = "INSERT INTO ArtistExternalIds (ArtistId, Provider, Value) VALUES (@ArtistId, @Provider, @Value)";
 
-	private const string InsertAlbum = "INSERT INTO Albums (Id, Title, Year, IsCompilation) VALUES (@Id, @Title, @Year, @IsCompilation)";
+	private const string UpsertAlbum = """
+		INSERT INTO Albums (Id, Title, Year, IsCompilation) VALUES (@Id, @Title, @Year, @IsCompilation)
+		ON CONFLICT (Id) DO UPDATE SET Title = excluded.Title, Year = excluded.Year, IsCompilation = excluded.IsCompilation
+		""";
+
+	private const string DeleteAlbumExternalIds = "DELETE FROM AlbumExternalIds WHERE AlbumId = @Id";
 
 	private const string InsertAlbumExternalId = "INSERT INTO AlbumExternalIds (AlbumId, Provider, Value) VALUES (@AlbumId, @Provider, @Value)";
+
+	private const string DeleteAlbumArtists = "DELETE FROM AlbumArtists WHERE AlbumId = @Id";
 
 	private const string InsertAlbumArtist = "INSERT INTO AlbumArtists (AlbumId, ArtistId, Position) VALUES (@AlbumId, @ArtistId, @Position)";
 
@@ -130,34 +142,35 @@ public class SqliteCatalogue(IOptions<SqliteOptions> options) : ICatalogue
 			.ToList();
 	}
 
-	public async Task AddArtists(IReadOnlyList<Artist> artists, CancellationToken ct)
+	public async Task SaveArtist(Artist artist, CancellationToken ct)
 	{
 		await using var connection = new SqliteConnection(_connectionString);
 		await connection.OpenAsync(ct);
 		await using var transaction = await connection.BeginTransactionAsync(ct);
 
-		var externalIdDtos = artists
-			.SelectMany(artist => artist.ExternalIds.Select(externalId => externalId.ToDto(artist.Id)));
+		var artistDto = artist.ToDto();
+		var externalIdDtos = artist.ExternalIds.Select(externalId => externalId.ToDto(artist.Id));
 
-		await connection.ExecuteAsync(InsertArtist, artists.Select(a => a.ToDto()), transaction);
+		await connection.ExecuteAsync(UpsertArtist, artistDto, transaction);
+		await connection.ExecuteAsync(DeleteArtistExternalIds, artistDto, transaction);
 		await connection.ExecuteAsync(InsertArtistExternalId, externalIdDtos, transaction);
 
 		await transaction.CommitAsync(ct);
 	}
 
-	public async Task AddAlbums(IReadOnlyList<Album> albums, CancellationToken ct)
+	public async Task SaveAlbum(Album album, CancellationToken ct)
 	{
 		await using var connection = new SqliteConnection(_connectionString);
 		await connection.OpenAsync(ct);
 		await using var transaction = await connection.BeginTransactionAsync(ct);
 
-		var albumDtos = albums.Select(album => album.ToDto());
-		var externalIdDtos = albums
-			.SelectMany(album => album.ExternalIds.Select(externalId => externalId.ToDto(album.Id)));
-		var albumArtistDtos = albums
-			.SelectMany(album => album.Artists.Select(albumArtist => albumArtist.ToDto(album.Id)));
+		var albumDto = album.ToDto();
+		var externalIdDtos = album.ExternalIds.Select(externalId => externalId.ToDto(album.Id));
+		var albumArtistDtos = album.Artists.Select(albumArtist => albumArtist.ToDto(album.Id));
 
-		await connection.ExecuteAsync(InsertAlbum, albumDtos, transaction);
+		await connection.ExecuteAsync(UpsertAlbum, albumDto, transaction);
+		await connection.ExecuteAsync(DeleteAlbumExternalIds, albumDto, transaction);
+		await connection.ExecuteAsync(DeleteAlbumArtists, albumDto, transaction);
 		await connection.ExecuteAsync(InsertAlbumExternalId, externalIdDtos, transaction);
 		await connection.ExecuteAsync(InsertAlbumArtist, albumArtistDtos, transaction);
 

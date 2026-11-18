@@ -1,3 +1,6 @@
+using DiscoTrack.Artists;
+using DiscoTrack.Albums;
+using DiscoTrack.Library;
 using DiscoTrack.Library.SyncLibrary;
 using Microsoft.Extensions.Logging;
 
@@ -20,16 +23,18 @@ public class SyncLibraryJobHandler(SyncLibrary syncLibrary, ILogger<SyncLibraryJ
 
 		var response = result.GetRight;
 
-		foreach (var unprocessedAlbum in response.UnprocessedAlbums)
-		{
-			logger.LogWarning("Failed to import {Title} ({Year}) from library", unprocessedAlbum.Title, unprocessedAlbum.Year);
-		}
-
 		logger.LogInformation(
-			"Library sync completed. {ArtistCount} new artists, {AlbumCount} new albums, {SkippedCount} skipped",
-			response.NewArtists.Count,
-			response.NewAlbums.Count,
-			response.UnprocessedAlbums.Count);
+			"Library sync completed. {ArtistCount} artists and {AlbumCount} albums imported",
+			response.Artists.Count,
+			response.Albums.Count);
+
+		if (response.Failures.Any())
+		{
+			logger.LogWarning(
+				"Import failed for {FailedArtistCount} artists and {FailedAlbumCount} albums",
+				response.Failures.Count(failure => failure.Entity is Artist),
+				response.Failures.Count(failure => failure.Entity is Album or LibraryAlbum));
+		}
 	}
 
 	private void LogError(ISyncLibraryError error)
@@ -41,9 +46,6 @@ public class SyncLibraryJobHandler(SyncLibrary syncLibrary, ILogger<SyncLibraryJ
 				break;
 			case FailedToReadLibraryError readLibrary:
 				logger.LogError("Library sync failed to fetch albums from library: {Message}", readLibrary.Message);
-				break;
-			case FailedToSaveCatalogueError saveCatalogue:
-				logger.LogError("Library sync failed to update catalogue: {Message}", saveCatalogue.Message);
 				break;
 			default:
 				logger.LogError("Library sync failed: {Error}", error);

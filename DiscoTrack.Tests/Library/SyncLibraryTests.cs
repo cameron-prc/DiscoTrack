@@ -1,8 +1,10 @@
 using DiscoTrack.Albums;
 using DiscoTrack.Artists;
+using DiscoTrack.Catalogue;
 using DiscoTrack.ExternalIds;
 using DiscoTrack.Library;
 using DiscoTrack.Library.SyncLibrary;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using static DiscoTrack.Tests.Library.LibraryValues;
 
@@ -10,12 +12,15 @@ namespace DiscoTrack.Tests.Library;
 
 public class SyncLibraryTests
 {
+	private static readonly LibraryArtist Tool = new(new SubsonicId("art-tool"), "Tool", new MusicBrainzId("mb-tool"));
+	private static readonly LibraryArtist Shihad = new(new SubsonicId("art-shihad"), "Shihad", new MusicBrainzId("mb-shihad"));
+
 	private readonly FakeCatalogue _catalogue = new();
 	private readonly FakeLibrarySource _source = new();
 
 	private SyncLibrary Sync()
 	{
-		return new SyncLibrary(_catalogue, _source);
+		return new SyncLibrary(_catalogue, _source, NullLogger<SyncLibrary>.Instance);
 	}
 
 	[Fact]
@@ -145,7 +150,7 @@ public class SyncLibraryTests
 	}
 
 	[Fact]
-	public async Task Leaves_off_a_musicbrainz_id_another_artist_in_the_run_already_holds()
+	public async Task Artists_sharing_a_musicbrainz_id_in_the_run_become_one_artist_credited_on_each_album()
 	{
 		var wolfAlice = new LibraryArtist(new SubsonicId("art-wolf-alice"), "Wolf Alice", new MusicBrainzId("mb-wolf-alice"));
 		var wolfAlce = new LibraryArtist(new SubsonicId("art-wolf-alce"), "Wolf Alce", new MusicBrainzId("mb-wolf-alice"));
@@ -156,31 +161,35 @@ public class SyncLibraryTests
 
 		await Sync().Run(CancellationToken.None);
 
-		Assert.Equal(
-			[[new SubsonicId("art-wolf-alice"), new MusicBrainzId("mb-wolf-alice")], [new SubsonicId("art-wolf-alce")]],
-			_catalogue.Artists.Select(a => a.ExternalIds));
+		var artist = Assert.Single(_catalogue.Artists);
+		Assert.Equal("Wolf Alice", artist.Name);
+		Assert.Equal([new SubsonicId("art-wolf-alice"), new MusicBrainzId("mb-wolf-alice")], artist.ExternalIds);
+		Assert.Equal(["My Love Is Cool", "Visions of a Life"], _catalogue.Albums.Select(a => a.Title));
+		Assert.All(_catalogue.Albums, album => Assert.Same(artist, Assert.Single(album.Artists).Artist));
 	}
 
 	[Fact]
-	public async Task Leaves_off_a_musicbrainz_id_an_album_in_the_catalogue_already_holds()
+	public async Task Links_a_library_album_to_the_catalogue_album_holding_its_musicbrainz_id()
 	{
-		_catalogue.Albums.Add(new Album { ExternalIds = [new SubsonicId("alb-odelay"), new MusicBrainzId("mb-odelay")], Title = "Odelay", Year = 1996 });
+		var odelay = new Album { ExternalIds = [new SubsonicId("alb-odelay"), new MusicBrainzId("mb-odelay")], Title = "Odelay", Year = 1996 };
+		_catalogue.Albums.Add(odelay);
 		_source.Albums.Add(Album("alb-odelay-rip", "Odelay", 1996, Beck) with { MusicBrainzId = new MusicBrainzId("mb-odelay") });
 
 		await Sync().Run(CancellationToken.None);
 
-		Assert.Equal([new SubsonicId("alb-odelay-rip")], _catalogue.Albums[1].ExternalIds);
+		Assert.Same(odelay, Assert.Single(_catalogue.Albums));
+		Assert.Equal([new MusicBrainzId("mb-odelay"), new SubsonicId("alb-odelay-rip")], odelay.ExternalIds);
 	}
 
 	[Fact]
-	public async Task Adds_artists_before_albums()
+	public async Task Saves_artists_before_albums()
 	{
 		_source.Albums.Add(Album("alb-hunting-whales", "Hunting Whales", 2007, TheChecks));
 
 		await Sync().Run(CancellationToken.None);
 
 		Assert.Equal(
-			[nameof(FakeCatalogue.GetArtists), nameof(FakeCatalogue.GetAlbums), nameof(FakeCatalogue.AddArtists), nameof(FakeCatalogue.AddAlbums)],
+			[nameof(FakeCatalogue.GetArtists), nameof(FakeCatalogue.GetAlbums), nameof(FakeCatalogue.SaveArtist), nameof(FakeCatalogue.SaveAlbum)],
 			_catalogue.Calls);
 	}
 
@@ -224,34 +233,106 @@ public class SyncLibraryTests
 	}
 
 	[Fact]
-	public async Task Returns_a_save_error_when_adding_artists_fails_and_does_not_add_albums()
+	public async Task A_failed_artist_save_is_reported_and_the_other_artists_are_still_saved()
 	{
-		_source.Albums.Add(Album("alb-hunting-whales", "Hunting Whales", 2007, TheChecks));
-		_catalogue.FailingMethod = nameof(FakeCatalogue.AddArtists);
+		var catalogue = new Mock<ICatalogue>();
+		catalogue.Setup(c => c.GetArtists(It.IsAny<CancellationToken>())).ReturnsAsync([]);
+		catalogue.Setup(c => c.GetAlbums(It.IsAny<CancellationToken>())).ReturnsAsync([]);
+		catalogue
+			.Setup(c => c.SaveArtist(It.Is<Artist>(artist => artist.Name == "The Checks"), It.IsAny<CancellationToken>()))
+			.ThrowsAsync(new InvalidOperationException("database is locked"));
+		_source.Albums.AddRange([
+			Album("alb-hunting-whales", "Hunting Whales", 2007, TheChecks),
+			Album("alb-odelay", "Odelay", 1996, Beck),
+		]);
 
-		var result = await Sync().Run(CancellationToken.None);
+		var result = await new SyncLibrary(catalogue.Object, _source, NullLogger<SyncLibrary>.Instance).Run(CancellationToken.None);
 
-		Assert.IsType<FailedToSaveCatalogueError>(Assert.Single(result.GetLeft));
-
-		Assert.DoesNotContain(nameof(FakeCatalogue.AddAlbums), _catalogue.Calls);
+		var response = result.GetRight;
+		var failure = Assert.Single(response.Failures);
+		Assert.Equal(SyncAction.Save, failure.Action);
+		Assert.Equal("The Checks", Assert.IsType<Artist>(failure.Entity).Name);
+		Assert.Equal("database is locked", failure.Reason);
+		Assert.Equal(["Beck"], response.Artists.Select(a => a.Name));
 	}
 
 	[Fact]
-	public async Task Returns_a_save_error_when_adding_albums_fails_after_artists_were_added()
+	public async Task A_failed_album_save_is_reported_and_the_other_albums_are_still_saved()
 	{
-		_source.Albums.Add(Album("alb-hunting-whales", "Hunting Whales", 2007, TheChecks));
-		_catalogue.FailingMethod = nameof(FakeCatalogue.AddAlbums);
+		var catalogue = new Mock<ICatalogue>();
+		catalogue.Setup(c => c.GetArtists(It.IsAny<CancellationToken>())).ReturnsAsync([]);
+		catalogue.Setup(c => c.GetAlbums(It.IsAny<CancellationToken>())).ReturnsAsync([]);
+		catalogue
+			.Setup(c => c.SaveAlbum(It.Is<Album>(album => album.Title == "Hunting Whales"), It.IsAny<CancellationToken>()))
+			.ThrowsAsync(new InvalidOperationException("database is locked"));
+		_source.Albums.AddRange([
+			Album("alb-hunting-whales", "Hunting Whales", 2007, TheChecks),
+			Album("alb-odelay", "Odelay", 1996, Beck),
+		]);
 
-		var result = await Sync().Run(CancellationToken.None);
+		var result = await new SyncLibrary(catalogue.Object, _source, NullLogger<SyncLibrary>.Instance).Run(CancellationToken.None);
 
-		Assert.IsType<FailedToSaveCatalogueError>(Assert.Single(result.GetLeft));
-
-		Assert.Single(_catalogue.Artists);
-		Assert.Empty(_catalogue.Albums);
+		var response = result.GetRight;
+		var failure = Assert.Single(response.Failures);
+		Assert.Equal(SyncAction.Save, failure.Action);
+		Assert.Equal("Hunting Whales", Assert.IsType<Album>(failure.Entity).Title);
+		Assert.Equal("database is locked", failure.Reason);
+		Assert.Equal(["Odelay"], response.Albums.Select(a => a.Title));
+		Assert.Equal(["The Checks", "Beck"], response.Artists.Select(a => a.Name));
 	}
 
 	[Fact]
-	public async Task Returns_the_new_artists_and_albums_and_the_skipped_albums()
+	public async Task Cancellation_during_a_save_propagates_instead_of_becoming_a_failure()
+	{
+		var catalogue = new Mock<ICatalogue>();
+		catalogue.Setup(c => c.GetArtists(It.IsAny<CancellationToken>())).ReturnsAsync([]);
+		catalogue.Setup(c => c.GetAlbums(It.IsAny<CancellationToken>())).ReturnsAsync([]);
+		catalogue
+			.Setup(c => c.SaveArtist(It.IsAny<Artist>(), It.IsAny<CancellationToken>()))
+			.ThrowsAsync(new OperationCanceledException());
+		_source.Albums.Add(Album("alb-hunting-whales", "Hunting Whales", 2007, TheChecks));
+
+		await Assert.ThrowsAsync<OperationCanceledException>(() => new SyncLibrary(catalogue.Object, _source, NullLogger<SyncLibrary>.Instance).Run(CancellationToken.None));
+	}
+
+	[Fact]
+	public async Task Saves_and_returns_the_artists_and_albums_it_linked()
+	{
+		var tool = new Artist { ExternalIds = [new MusicBrainzId("mb-tool")], Name = "Tool" };
+		var lateralus = new Album { ExternalIds = [new MusicBrainzId("mb-lateralus")], Title = "Lateralus", Year = 2001 };
+		_catalogue.Artists.Add(tool);
+		_catalogue.Albums.Add(lateralus);
+		_source.Albums.Add(Album("alb-lateralus", "Lateralus", 2001, Tool) with { MusicBrainzId = new MusicBrainzId("mb-lateralus") });
+
+		var result = await Sync().Run(CancellationToken.None);
+
+		var response = result.GetRight;
+		Assert.Equal([tool], response.Artists);
+		Assert.Equal([lateralus], response.Albums);
+		Assert.Equal([new MusicBrainzId("mb-tool"), new SubsonicId("art-tool")], tool.ExternalIds);
+		Assert.Equal([new MusicBrainzId("mb-lateralus"), new SubsonicId("alb-lateralus")], lateralus.ExternalIds);
+		Assert.Empty(response.Failures);
+		Assert.Contains(nameof(FakeCatalogue.SaveArtist), _catalogue.Calls);
+		Assert.Contains(nameof(FakeCatalogue.SaveAlbum), _catalogue.Calls);
+	}
+
+	[Fact]
+	public async Task Saves_an_artist_once_when_it_is_added_and_linked_in_the_same_run()
+	{
+		var toolAgain = Tool with { Id = new SubsonicId("art-tool-again") };
+		_source.Albums.AddRange([
+			Album("alb-lateralus", "Lateralus", 2001, Tool),
+			Album("alb-aenima", "Aenima", 1996, toolAgain),
+		]);
+
+		var result = await Sync().Run(CancellationToken.None);
+
+		Assert.Single(result.GetRight.Artists);
+		Assert.Single(_catalogue.Calls, call => call == nameof(FakeCatalogue.SaveArtist));
+	}
+
+	[Fact]
+	public async Task Returns_the_added_artists_and_albums_and_the_albums_it_could_not_import()
 	{
 		_source.Albums.AddRange([
 			Album("alb-untagged", "Untagged", null, TheChecks),
@@ -261,9 +342,11 @@ public class SyncLibraryTests
 		var result = await Sync().Run(CancellationToken.None);
 
 		var response = result.GetRight;
-		Assert.Equal([new SubsonicId("art-checks")], response.NewArtists.SelectMany(a => a.ExternalIds));
-		Assert.Equal([new SubsonicId("alb-hunting-whales")], response.NewAlbums.SelectMany(a => a.ExternalIds));
-		Assert.Equal([new SubsonicId("alb-untagged")], response.UnprocessedAlbums.Select(a => a.Id));
+		Assert.Equal([new SubsonicId("art-checks")], response.Artists.SelectMany(a => a.ExternalIds));
+		Assert.Equal([new SubsonicId("alb-hunting-whales")], response.Albums.SelectMany(a => a.ExternalIds));
+		var failure = Assert.Single(response.Failures);
+		Assert.Equal(SyncAction.Import, failure.Action);
+		Assert.Equal(new SubsonicId("alb-untagged"), Assert.IsType<LibraryAlbum>(failure.Entity).Id);
 	}
 
 	[Fact]
@@ -274,15 +357,15 @@ public class SyncLibraryTests
 			.Setup(s => s.GetAlbums(It.IsAny<CancellationToken>()))
 			.ThrowsAsync(new OperationCanceledException());
 
-		await Assert.ThrowsAsync<OperationCanceledException>(() => new SyncLibrary(_catalogue, source.Object).Run(CancellationToken.None));
+		await Assert.ThrowsAsync<OperationCanceledException>(() => new SyncLibrary(_catalogue, source.Object, NullLogger<SyncLibrary>.Instance).Run(CancellationToken.None));
 
 		AssertNothingWritten();
 	}
 
 	private void AssertNothingWritten()
 	{
-		Assert.DoesNotContain(nameof(FakeCatalogue.AddArtists), _catalogue.Calls);
-		Assert.DoesNotContain(nameof(FakeCatalogue.AddAlbums), _catalogue.Calls);
+		Assert.DoesNotContain(nameof(FakeCatalogue.SaveArtist), _catalogue.Calls);
+		Assert.DoesNotContain(nameof(FakeCatalogue.SaveAlbum), _catalogue.Calls);
 		Assert.Empty(_catalogue.Artists);
 		Assert.Empty(_catalogue.Albums);
 	}

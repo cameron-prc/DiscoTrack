@@ -3,4 +3,12 @@ using DiscoTrack.Artists;
 
 namespace DiscoTrack.Library.SyncLibrary;
 
-public record SyncLibraryResponse(IList<Artist> NewArtists, IList<Album> NewAlbums, IList<LibraryAlbum> UnprocessedAlbums);
+public record SyncLibraryResponse(IList<Artist> Artists, IList<Album> Albums, IList<SyncFailure> Failures);
+
+public record SyncFailure(SyncAction Action, object Entity, string Reason);
+
+public enum SyncAction
+{
+	Import,
+	Save,
+}

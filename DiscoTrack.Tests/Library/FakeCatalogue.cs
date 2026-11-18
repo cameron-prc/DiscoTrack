@@ -29,17 +29,23 @@ internal sealed class FakeCatalogue : ICatalogue
 		return Task.FromResult<IReadOnlyList<Album>>(Albums.Where(a => a.Artists.Any(c => c.Artist.Id == artistId)).ToList());
 	}
 
-	public Task AddArtists(IReadOnlyList<Artist> artists, CancellationToken ct)
+	public Task SaveArtist(Artist artist, CancellationToken ct)
 	{
-		Record(nameof(AddArtists));
-		Artists.AddRange(artists);
+		Record(nameof(SaveArtist));
+		if (!Artists.Contains(artist))
+		{
+			Artists.Add(artist);
+		}
 		return Task.CompletedTask;
 	}
 
-	public Task AddAlbums(IReadOnlyList<Album> albums, CancellationToken ct)
+	public Task SaveAlbum(Album album, CancellationToken ct)
 	{
-		Record(nameof(AddAlbums));
-		Albums.AddRange(albums);
+		Record(nameof(SaveAlbum));
+		if (!Albums.Contains(album))
+		{
+			Albums.Add(album);
+		}
 		return Task.CompletedTask;
 	}
 

@@ -14,4 +14,21 @@ public class Album
 
 	public Artist? PrimaryArtist()
 		=> IsCompilation ? null : Artists.MinBy(a => a.Position)?.Artist;
+
+	public void SetExternalId(ExternalId externalId)
+	{
+		ExternalIds = ExternalIds
+			.Where(existing => existing.Provider != externalId.Provider)
+			.Append(externalId)
+			.ToList();
+	}
+
+	public override string ToString()
+	{
+		var artistName = IsCompilation ? "Various Artists" : PrimaryArtist()?.Name;
+
+		return artistName is null
+			? $"NoArtist - {Title} ({Year}) ({Id})"
+			: $"{artistName} - {Title} ({Year}) ({Id})";
+	}
 }

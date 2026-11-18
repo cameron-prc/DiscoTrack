@@ -5,5 +5,3 @@ public interface ISyncLibraryError;
 public record FailedToReadCatalogueError(string Message) : ISyncLibraryError;
 
 public record FailedToReadLibraryError(string Message) : ISyncLibraryError;
-
-public record FailedToSaveCatalogueError(string Message) : ISyncLibraryError;
