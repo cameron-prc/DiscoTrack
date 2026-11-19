@@ -104,7 +104,9 @@ internal static class Extensions
 		return Enum.Parse<Provider>(provider) switch
 		{
 			Provider.Subsonic => new SubsonicId(value),
-			Provider.MusicBrainz => new MusicBrainzId(value),
+			Provider.MusicBrainzArtist => new MusicBrainzArtistId(value),
+			Provider.MusicBrainzRelease => new MusicBrainzReleaseId(value),
+			Provider.MusicBrainzReleaseGroup => new MusicBrainzReleaseGroupId(value),
 			_ => throw new ArgumentOutOfRangeException(nameof(provider), provider, null),
 		};
 	}

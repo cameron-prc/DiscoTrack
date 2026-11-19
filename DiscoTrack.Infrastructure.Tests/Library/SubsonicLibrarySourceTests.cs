@@ -96,7 +96,7 @@ public class SubsonicLibrarySourceTests
 
 		var album = (await Source().GetAlbums(CancellationToken.None)).Single();
 
-		Assert.Equal(new MusicBrainzId("3736e21d-c00c-4b11-bdd5-8e2e1e3ee967"), album.MusicBrainzId);
+		Assert.Equal(new MusicBrainzReleaseId("3736e21d-c00c-4b11-bdd5-8e2e1e3ee967"), album.MusicBrainzId);
 	}
 
 	[Fact]
@@ -130,7 +130,7 @@ public class SubsonicLibrarySourceTests
 
 		var artist = (await Source().GetArtists(CancellationToken.None)).Single();
 
-		Assert.Equal(new LibraryArtist(new SubsonicId("art-puscifer"), "Puscifer", new MusicBrainzId("6e4277d8-7b64-44a3-b823-13bd15114e22")), artist);
+		Assert.Equal(new LibraryArtist(new SubsonicId("art-puscifer"), "Puscifer", new MusicBrainzArtistId("6e4277d8-7b64-44a3-b823-13bd15114e22")), artist);
 	}
 
 	[Fact]

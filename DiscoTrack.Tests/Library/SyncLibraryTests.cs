@@ -12,8 +12,8 @@ namespace DiscoTrack.Tests.Library;
 
 public class SyncLibraryTests
 {
-	private static readonly LibraryArtist Tool = new(new SubsonicId("art-tool"), "Tool", new MusicBrainzId("mb-tool"));
-	private static readonly LibraryArtist Shihad = new(new SubsonicId("art-shihad"), "Shihad", new MusicBrainzId("mb-shihad"));
+	private static readonly LibraryArtist Tool = new(new SubsonicId("art-tool"), "Tool", new MusicBrainzArtistId("mb-tool"));
+	private static readonly LibraryArtist Shihad = new(new SubsonicId("art-shihad"), "Shihad", new MusicBrainzArtistId("mb-shihad"));
 
 	private readonly FakeCatalogue _catalogue = new();
 	private readonly FakeLibrarySource _source = new();
@@ -140,20 +140,20 @@ public class SyncLibraryTests
 	[Fact]
 	public async Task Stores_musicbrainz_ids_alongside_the_source_ids()
 	{
-		var tool = new LibraryArtist(new SubsonicId("art-tool"), "Tool", new MusicBrainzId("mb-tool"));
-		_source.Albums.Add(Album("alb-lateralus", "Lateralus", 2001, tool) with { MusicBrainzId = new MusicBrainzId("mb-lateralus") });
+		var tool = new LibraryArtist(new SubsonicId("art-tool"), "Tool", new MusicBrainzArtistId("mb-tool"));
+		_source.Albums.Add(Album("alb-lateralus", "Lateralus", 2001, tool) with { MusicBrainzId = new MusicBrainzReleaseId("mb-lateralus") });
 
 		await Sync().Run(CancellationToken.None);
 
-		Assert.Equal([new SubsonicId("art-tool"), new MusicBrainzId("mb-tool")], Assert.Single(_catalogue.Artists).ExternalIds);
-		Assert.Equal([new SubsonicId("alb-lateralus"), new MusicBrainzId("mb-lateralus")], Assert.Single(_catalogue.Albums).ExternalIds);
+		Assert.Equal([new SubsonicId("art-tool"), new MusicBrainzArtistId("mb-tool")], Assert.Single(_catalogue.Artists).ExternalIds);
+		Assert.Equal([new SubsonicId("alb-lateralus"), new MusicBrainzReleaseId("mb-lateralus")], Assert.Single(_catalogue.Albums).ExternalIds);
 	}
 
 	[Fact]
 	public async Task Artists_sharing_a_musicbrainz_id_in_the_run_become_one_artist_credited_on_each_album()
 	{
-		var wolfAlice = new LibraryArtist(new SubsonicId("art-wolf-alice"), "Wolf Alice", new MusicBrainzId("mb-wolf-alice"));
-		var wolfAlce = new LibraryArtist(new SubsonicId("art-wolf-alce"), "Wolf Alce", new MusicBrainzId("mb-wolf-alice"));
+		var wolfAlice = new LibraryArtist(new SubsonicId("art-wolf-alice"), "Wolf Alice", new MusicBrainzArtistId("mb-wolf-alice"));
+		var wolfAlce = new LibraryArtist(new SubsonicId("art-wolf-alce"), "Wolf Alce", new MusicBrainzArtistId("mb-wolf-alice"));
 		_source.Albums.AddRange([
 			Album("alb-my-love-is-cool", "My Love Is Cool", 2015, wolfAlice),
 			Album("alb-visions", "Visions of a Life", 2017, wolfAlce),
@@ -163,7 +163,7 @@ public class SyncLibraryTests
 
 		var artist = Assert.Single(_catalogue.Artists);
 		Assert.Equal("Wolf Alice", artist.Name);
-		Assert.Equal([new SubsonicId("art-wolf-alice"), new MusicBrainzId("mb-wolf-alice"), new SubsonicId("art-wolf-alce")], artist.ExternalIds);
+		Assert.Equal([new SubsonicId("art-wolf-alice"), new MusicBrainzArtistId("mb-wolf-alice"), new SubsonicId("art-wolf-alce")], artist.ExternalIds);
 		Assert.Equal(["My Love Is Cool", "Visions of a Life"], _catalogue.Albums.Select(a => a.Title));
 		Assert.All(_catalogue.Albums, album => Assert.Same(artist, Assert.Single(album.Artists).Artist));
 	}
@@ -171,11 +171,11 @@ public class SyncLibraryTests
 	[Fact]
 	public async Task A_second_run_over_artists_and_albums_sharing_a_musicbrainz_id_saves_nothing()
 	{
-		var wolfAlice = new LibraryArtist(new SubsonicId("art-wolf-alice"), "Wolf Alice", new MusicBrainzId("mb-wolf-alice"));
-		var wolfAlce = new LibraryArtist(new SubsonicId("art-wolf-alce"), "Wolf Alce", new MusicBrainzId("mb-wolf-alice"));
+		var wolfAlice = new LibraryArtist(new SubsonicId("art-wolf-alice"), "Wolf Alice", new MusicBrainzArtistId("mb-wolf-alice"));
+		var wolfAlce = new LibraryArtist(new SubsonicId("art-wolf-alce"), "Wolf Alce", new MusicBrainzArtistId("mb-wolf-alice"));
 		_source.Albums.AddRange([
-			Album("alb-visions", "Visions of a Life", 2017, wolfAlice) with { MusicBrainzId = new MusicBrainzId("mb-visions") },
-			Album("alb-visions-rip", "Visions of a Life", 2017, wolfAlce) with { MusicBrainzId = new MusicBrainzId("mb-visions") },
+			Album("alb-visions", "Visions of a Life", 2017, wolfAlice) with { MusicBrainzId = new MusicBrainzReleaseId("mb-visions") },
+			Album("alb-visions-rip", "Visions of a Life", 2017, wolfAlce) with { MusicBrainzId = new MusicBrainzReleaseId("mb-visions") },
 		]);
 		await Sync().Run(CancellationToken.None);
 		_catalogue.Calls.Clear();
@@ -186,39 +186,39 @@ public class SyncLibraryTests
 		Assert.Empty(result.GetRight.Albums);
 		Assert.Equal([nameof(FakeCatalogue.GetArtists), nameof(FakeCatalogue.GetAlbums)], _catalogue.Calls);
 		Assert.Equal(
-			[new SubsonicId("art-wolf-alice"), new MusicBrainzId("mb-wolf-alice"), new SubsonicId("art-wolf-alce")],
+			[new SubsonicId("art-wolf-alice"), new MusicBrainzArtistId("mb-wolf-alice"), new SubsonicId("art-wolf-alce")],
 			Assert.Single(_catalogue.Artists).ExternalIds);
 		Assert.Equal(
-			[new SubsonicId("alb-visions"), new MusicBrainzId("mb-visions"), new SubsonicId("alb-visions-rip")],
+			[new SubsonicId("alb-visions"), new MusicBrainzReleaseId("mb-visions"), new SubsonicId("alb-visions-rip")],
 			Assert.Single(_catalogue.Albums).ExternalIds);
 	}
 
 	[Fact]
 	public async Task Adds_a_duplicate_library_id_to_the_catalogue_entity_without_dropping_the_one_it_has()
 	{
-		var tool = new Artist { ExternalIds = [new SubsonicId("art-tool"), new MusicBrainzId("mb-tool")], Name = "Tool" };
-		var lateralus = new Album { ExternalIds = [new SubsonicId("alb-lateralus"), new MusicBrainzId("mb-lateralus")], Title = "Lateralus", Year = 2001 };
+		var tool = new Artist { ExternalIds = [new SubsonicId("art-tool"), new MusicBrainzArtistId("mb-tool")], Name = "Tool" };
+		var lateralus = new Album { ExternalIds = [new SubsonicId("alb-lateralus"), new MusicBrainzReleaseId("mb-lateralus")], Title = "Lateralus", Year = 2001 };
 		_catalogue.Artists.Add(tool);
 		_catalogue.Albums.Add(lateralus);
 		var toolAgain = Tool with { Id = new SubsonicId("art-tool-again") };
 		_source.Albums.AddRange([
-			Album("alb-lateralus", "Lateralus", 2001, Tool) with { MusicBrainzId = new MusicBrainzId("mb-lateralus") },
-			Album("alb-lateralus-rip", "Lateralus", 2001, toolAgain) with { MusicBrainzId = new MusicBrainzId("mb-lateralus") },
+			Album("alb-lateralus", "Lateralus", 2001, Tool) with { MusicBrainzId = new MusicBrainzReleaseId("mb-lateralus") },
+			Album("alb-lateralus-rip", "Lateralus", 2001, toolAgain) with { MusicBrainzId = new MusicBrainzReleaseId("mb-lateralus") },
 		]);
 
 		var result = await Sync().Run(CancellationToken.None);
 
 		Assert.Equal([tool], result.GetRight.Artists);
 		Assert.Equal([lateralus], result.GetRight.Albums);
-		Assert.Equal([new SubsonicId("art-tool"), new MusicBrainzId("mb-tool"), new SubsonicId("art-tool-again")], tool.ExternalIds);
-		Assert.Equal([new SubsonicId("alb-lateralus"), new MusicBrainzId("mb-lateralus"), new SubsonicId("alb-lateralus-rip")], lateralus.ExternalIds);
+		Assert.Equal([new SubsonicId("art-tool"), new MusicBrainzArtistId("mb-tool"), new SubsonicId("art-tool-again")], tool.ExternalIds);
+		Assert.Equal([new SubsonicId("alb-lateralus"), new MusicBrainzReleaseId("mb-lateralus"), new SubsonicId("alb-lateralus-rip")], lateralus.ExternalIds);
 	}
 
 	[Fact]
 	public async Task Saves_only_the_catalogue_entities_whose_ids_changed()
 	{
-		var tool = new Artist { ExternalIds = [new SubsonicId("art-tool"), new MusicBrainzId("mb-tool")], Name = "Tool" };
-		var shihad = new Artist { ExternalIds = [new SubsonicId("art-shihad-old"), new MusicBrainzId("mb-shihad")], Name = "Shihad" };
+		var tool = new Artist { ExternalIds = [new SubsonicId("art-tool"), new MusicBrainzArtistId("mb-tool")], Name = "Tool" };
+		var shihad = new Artist { ExternalIds = [new SubsonicId("art-shihad-old"), new MusicBrainzArtistId("mb-shihad")], Name = "Shihad" };
 		_catalogue.Artists.AddRange([tool, shihad]);
 		_catalogue.Albums.Add(new Album { ExternalIds = [new SubsonicId("alb-lateralus")], Title = "Lateralus", Year = 2001 });
 		_catalogue.Albums.Add(new Album { ExternalIds = [new SubsonicId("alb-killjoy")], Title = "Killjoy", Year = 1995 });
@@ -231,7 +231,7 @@ public class SyncLibraryTests
 
 		Assert.Equal([shihad], result.GetRight.Artists);
 		Assert.Empty(result.GetRight.Albums);
-		Assert.Equal([new MusicBrainzId("mb-shihad"), new SubsonicId("art-shihad")], shihad.ExternalIds);
+		Assert.Equal([new MusicBrainzArtistId("mb-shihad"), new SubsonicId("art-shihad")], shihad.ExternalIds);
 		Assert.Single(_catalogue.Calls, call => call == nameof(FakeCatalogue.SaveArtist));
 		Assert.DoesNotContain(nameof(FakeCatalogue.SaveAlbum), _catalogue.Calls);
 	}
@@ -239,21 +239,21 @@ public class SyncLibraryTests
 	[Fact]
 	public async Task Links_a_library_album_to_the_catalogue_album_holding_its_musicbrainz_id()
 	{
-		var odelay = new Album { ExternalIds = [new SubsonicId("alb-odelay"), new MusicBrainzId("mb-odelay")], Title = "Odelay", Year = 1996 };
+		var odelay = new Album { ExternalIds = [new SubsonicId("alb-odelay"), new MusicBrainzReleaseId("mb-odelay")], Title = "Odelay", Year = 1996 };
 		_catalogue.Albums.Add(odelay);
-		_source.Albums.Add(Album("alb-odelay-rip", "Odelay", 1996, Beck) with { MusicBrainzId = new MusicBrainzId("mb-odelay") });
+		_source.Albums.Add(Album("alb-odelay-rip", "Odelay", 1996, Beck) with { MusicBrainzId = new MusicBrainzReleaseId("mb-odelay") });
 
 		await Sync().Run(CancellationToken.None);
 
 		Assert.Same(odelay, Assert.Single(_catalogue.Albums));
-		Assert.Equal([new MusicBrainzId("mb-odelay"), new SubsonicId("alb-odelay-rip")], odelay.ExternalIds);
+		Assert.Equal([new MusicBrainzReleaseId("mb-odelay"), new SubsonicId("alb-odelay-rip")], odelay.ExternalIds);
 	}
 
 	[Fact]
 	public async Task Removes_the_library_ids_of_artists_and_albums_no_longer_in_the_library_and_keeps_them_in_the_catalogue()
 	{
-		var tool = new Artist { ExternalIds = [new SubsonicId("art-tool"), new MusicBrainzId("mb-tool")], Name = "Tool" };
-		var lateralus = new Album { ExternalIds = [new SubsonicId("alb-lateralus"), new MusicBrainzId("mb-lateralus")], Title = "Lateralus", Year = 2001 };
+		var tool = new Artist { ExternalIds = [new SubsonicId("art-tool"), new MusicBrainzArtistId("mb-tool")], Name = "Tool" };
+		var lateralus = new Album { ExternalIds = [new SubsonicId("alb-lateralus"), new MusicBrainzReleaseId("mb-lateralus")], Title = "Lateralus", Year = 2001 };
 		var checks = new Artist { ExternalIds = [new SubsonicId("art-checks")], Name = "The Checks" };
 		var huntingWhales = new Album { ExternalIds = [new SubsonicId("alb-hunting-whales")], Title = "Hunting Whales", Year = 2007 };
 		_catalogue.Artists.AddRange([tool, checks]);
@@ -264,8 +264,8 @@ public class SyncLibraryTests
 
 		Assert.Equal([tool], result.GetRight.Artists);
 		Assert.Equal([lateralus], result.GetRight.Albums);
-		Assert.Equal([new MusicBrainzId("mb-tool")], tool.ExternalIds);
-		Assert.Equal([new MusicBrainzId("mb-lateralus")], lateralus.ExternalIds);
+		Assert.Equal([new MusicBrainzArtistId("mb-tool")], tool.ExternalIds);
+		Assert.Equal([new MusicBrainzReleaseId("mb-lateralus")], lateralus.ExternalIds);
 		Assert.Equal([tool, checks], _catalogue.Artists);
 		Assert.Equal([lateralus, huntingWhales], _catalogue.Albums);
 	}
@@ -273,8 +273,8 @@ public class SyncLibraryTests
 	[Fact]
 	public async Task Leaves_catalogue_entities_that_hold_no_library_id_alone()
 	{
-		_catalogue.Artists.Add(new Artist { ExternalIds = [new MusicBrainzId("mb-tool")], Name = "Tool" });
-		_catalogue.Albums.Add(new Album { ExternalIds = [new MusicBrainzId("mb-lateralus")], Title = "Lateralus", Year = 2001 });
+		_catalogue.Artists.Add(new Artist { ExternalIds = [new MusicBrainzArtistId("mb-tool")], Name = "Tool" });
+		_catalogue.Albums.Add(new Album { ExternalIds = [new MusicBrainzReleaseId("mb-lateralus")], Title = "Lateralus", Year = 2001 });
 		_source.Albums.Add(Album("alb-hunting-whales", "Hunting Whales", 2007, TheChecks));
 
 		var result = await Sync().Run(CancellationToken.None);
@@ -300,7 +300,7 @@ public class SyncLibraryTests
 	[Fact]
 	public async Task An_empty_library_removes_every_library_id()
 	{
-		var tool = new Artist { ExternalIds = [new SubsonicId("art-tool"), new MusicBrainzId("mb-tool")], Name = "Tool" };
+		var tool = new Artist { ExternalIds = [new SubsonicId("art-tool"), new MusicBrainzArtistId("mb-tool")], Name = "Tool" };
 		var lateralus = new Album { ExternalIds = [new SubsonicId("alb-lateralus")], Title = "Lateralus", Year = 2001 };
 		_catalogue.Artists.Add(tool);
 		_catalogue.Albums.Add(lateralus);
@@ -309,7 +309,7 @@ public class SyncLibraryTests
 
 		Assert.Equal([tool], result.GetRight.Artists);
 		Assert.Equal([lateralus], result.GetRight.Albums);
-		Assert.Equal([new MusicBrainzId("mb-tool")], tool.ExternalIds);
+		Assert.Equal([new MusicBrainzArtistId("mb-tool")], tool.ExternalIds);
 		Assert.Empty(lateralus.ExternalIds);
 	}
 
@@ -430,19 +430,19 @@ public class SyncLibraryTests
 	[Fact]
 	public async Task Saves_and_returns_the_artists_and_albums_it_linked()
 	{
-		var tool = new Artist { ExternalIds = [new MusicBrainzId("mb-tool")], Name = "Tool" };
-		var lateralus = new Album { ExternalIds = [new MusicBrainzId("mb-lateralus")], Title = "Lateralus", Year = 2001 };
+		var tool = new Artist { ExternalIds = [new MusicBrainzArtistId("mb-tool")], Name = "Tool" };
+		var lateralus = new Album { ExternalIds = [new MusicBrainzReleaseId("mb-lateralus")], Title = "Lateralus", Year = 2001 };
 		_catalogue.Artists.Add(tool);
 		_catalogue.Albums.Add(lateralus);
-		_source.Albums.Add(Album("alb-lateralus", "Lateralus", 2001, Tool) with { MusicBrainzId = new MusicBrainzId("mb-lateralus") });
+		_source.Albums.Add(Album("alb-lateralus", "Lateralus", 2001, Tool) with { MusicBrainzId = new MusicBrainzReleaseId("mb-lateralus") });
 
 		var result = await Sync().Run(CancellationToken.None);
 
 		var response = result.GetRight;
 		Assert.Equal([tool], response.Artists);
 		Assert.Equal([lateralus], response.Albums);
-		Assert.Equal([new MusicBrainzId("mb-tool"), new SubsonicId("art-tool")], tool.ExternalIds);
-		Assert.Equal([new MusicBrainzId("mb-lateralus"), new SubsonicId("alb-lateralus")], lateralus.ExternalIds);
+		Assert.Equal([new MusicBrainzArtistId("mb-tool"), new SubsonicId("art-tool")], tool.ExternalIds);
+		Assert.Equal([new MusicBrainzReleaseId("mb-lateralus"), new SubsonicId("alb-lateralus")], lateralus.ExternalIds);
 		Assert.Empty(response.Failures);
 		Assert.Contains(nameof(FakeCatalogue.SaveArtist), _catalogue.Calls);
 		Assert.Contains(nameof(FakeCatalogue.SaveAlbum), _catalogue.Calls);

@@ -3,5 +3,7 @@ namespace DiscoTrack.ExternalIds;
 public enum Provider
 {
 	Subsonic,
-	MusicBrainz,
+	MusicBrainzArtist,
+	MusicBrainzRelease,
+	MusicBrainzReleaseGroup,
 }

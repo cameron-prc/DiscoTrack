@@ -63,6 +63,31 @@ public sealed class MigratorTests : IDisposable
 	}
 
 	[Fact]
+	public void Splitting_musicbrainz_providers_makes_artist_ids_artists_and_album_ids_releases()
+	{
+		using var connection = new SqliteConnection(_db.ConnectionString);
+		connection.Open();
+		connection.Execute(Script("0001_create_library_tables.sql"));
+		connection.Execute(Script("0002_move_subsonic_ids_to_external_ids.sql"));
+		connection.Execute(Script("0003_add_is_tracked.sql"));
+		connection.Execute("""
+			INSERT INTO Artists (Id, Name) VALUES ('artist-1', 'Tool');
+			INSERT INTO Albums (Id, Title, Year) VALUES ('album-1', 'Lateralus', 2001);
+			INSERT INTO ArtistExternalIds (ArtistId, Provider, Value) VALUES ('artist-1', 'Subsonic', 'art-tool'), ('artist-1', 'MusicBrainz', 'mb-tool');
+			INSERT INTO AlbumExternalIds (AlbumId, Provider, Value) VALUES ('album-1', 'Subsonic', 'alb-lateralus'), ('album-1', 'MusicBrainz', 'mb-lateralus');
+			""");
+
+		connection.Execute(Script("0004_split_musicbrainz_providers.sql"));
+
+		Assert.Equal(
+			[("MusicBrainzArtist", "mb-tool"), ("Subsonic", "art-tool")],
+			connection.Query<(string, string)>("SELECT Provider, Value FROM ArtistExternalIds ORDER BY Provider"));
+		Assert.Equal(
+			[("MusicBrainzRelease", "mb-lateralus"), ("Subsonic", "alb-lateralus")],
+			connection.Query<(string, string)>("SELECT Provider, Value FROM AlbumExternalIds ORDER BY Provider"));
+	}
+
+	[Fact]
 	public void Migrate_on_a_current_database_applies_nothing()
 	{
 		Migrator.Migrate(_db.ConnectionString);

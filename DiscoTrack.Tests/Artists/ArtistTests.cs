@@ -10,49 +10,49 @@ public class ArtistTests
 	{
 		var artist = new Artist { ExternalIds = [new SubsonicId("art-tool")], Name = "Tool" };
 
-		artist.SetExternalIds([new MusicBrainzId("mb-tool")]);
+		artist.SetExternalIds([new MusicBrainzArtistId("mb-tool")]);
 
-		Assert.Equal([new SubsonicId("art-tool"), new MusicBrainzId("mb-tool")], artist.ExternalIds);
+		Assert.Equal([new SubsonicId("art-tool"), new MusicBrainzArtistId("mb-tool")], artist.ExternalIds);
 	}
 
 	[Fact]
 	public void SetExternalIds_replaces_the_ids_from_the_same_provider()
 	{
-		var artist = new Artist { ExternalIds = [new SubsonicId("art-tool"), new MusicBrainzId("mb-tool")], Name = "Tool" };
+		var artist = new Artist { ExternalIds = [new SubsonicId("art-tool"), new MusicBrainzArtistId("mb-tool")], Name = "Tool" };
 
 		artist.SetExternalIds([new SubsonicId("art-tool-rescanned")]);
 
-		Assert.Equal([new MusicBrainzId("mb-tool"), new SubsonicId("art-tool-rescanned")], artist.ExternalIds);
+		Assert.Equal([new MusicBrainzArtistId("mb-tool"), new SubsonicId("art-tool-rescanned")], artist.ExternalIds);
 	}
 
 	[Fact]
 	public void SetExternalIds_holds_several_ids_from_one_provider()
 	{
-		var artist = new Artist { ExternalIds = [new SubsonicId("art-tool"), new MusicBrainzId("mb-tool")], Name = "Tool" };
+		var artist = new Artist { ExternalIds = [new SubsonicId("art-tool"), new MusicBrainzArtistId("mb-tool")], Name = "Tool" };
 
 		artist.SetExternalIds([new SubsonicId("art-tool"), new SubsonicId("art-tool-dupe")]);
 
-		Assert.Equal([new SubsonicId("art-tool"), new MusicBrainzId("mb-tool"), new SubsonicId("art-tool-dupe")], artist.ExternalIds);
+		Assert.Equal([new SubsonicId("art-tool"), new MusicBrainzArtistId("mb-tool"), new SubsonicId("art-tool-dupe")], artist.ExternalIds);
 	}
 
 	[Fact]
 	public void SetExternalIds_leaves_the_ids_as_they_were_when_nothing_changed()
 	{
-		var artist = new Artist { ExternalIds = [new SubsonicId("art-tool"), new MusicBrainzId("mb-tool")], Name = "Tool" };
+		var artist = new Artist { ExternalIds = [new SubsonicId("art-tool"), new MusicBrainzArtistId("mb-tool")], Name = "Tool" };
 
 		artist.SetExternalIds([new SubsonicId("art-tool")]);
 
-		Assert.Equal([new SubsonicId("art-tool"), new MusicBrainzId("mb-tool")], artist.ExternalIds);
+		Assert.Equal([new SubsonicId("art-tool"), new MusicBrainzArtistId("mb-tool")], artist.ExternalIds);
 	}
 
 	[Fact]
 	public void RemoveExternalIds_drops_the_ids_from_the_given_provider()
 	{
-		var artist = new Artist { ExternalIds = [new SubsonicId("art-tool"), new MusicBrainzId("mb-tool"), new SubsonicId("art-tool-dupe")], Name = "Tool" };
+		var artist = new Artist { ExternalIds = [new SubsonicId("art-tool"), new MusicBrainzArtistId("mb-tool"), new SubsonicId("art-tool-dupe")], Name = "Tool" };
 
 		artist.RemoveExternalIds(Provider.Subsonic);
 
-		Assert.Equal([new MusicBrainzId("mb-tool")], artist.ExternalIds);
+		Assert.Equal([new MusicBrainzArtistId("mb-tool")], artist.ExternalIds);
 	}
 
 	[Fact]

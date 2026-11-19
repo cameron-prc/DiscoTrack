@@ -8,7 +8,7 @@ public record LibraryAlbum(
 	int? Year,
 	bool IsCompilation,
 	IReadOnlyList<LibraryArtist> Artists,
-	MusicBrainzId? MusicBrainzId = null)
+	MusicBrainzReleaseId? MusicBrainzId = null)
 {
 	public IReadOnlyList<ExternalId> ExternalIds
 		=> new ExternalId?[] { Id, MusicBrainzId }.OfType<ExternalId>().ToList();

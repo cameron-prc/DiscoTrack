@@ -71,7 +71,7 @@ public sealed class SqliteCatalogueTests : IDisposable
 	[Fact]
 	public async Task GetArtists_returns_every_external_id_of_an_artist()
 	{
-		var tool = new Artist { ExternalIds = [new SubsonicId("art-tool"), new SubsonicId("art-tool-dupe"), new MusicBrainzId("mb-tool")], Name = "Tool" };
+		var tool = new Artist { ExternalIds = [new SubsonicId("art-tool"), new SubsonicId("art-tool-dupe"), new MusicBrainzArtistId("mb-tool")], Name = "Tool" };
 		await SaveArtists(tool);
 
 		var artist = Assert.Single(await _catalogue.GetArtists(CancellationToken.None));
@@ -84,7 +84,7 @@ public sealed class SqliteCatalogueTests : IDisposable
 	{
 		await SaveArtists(
 			new Artist { ExternalIds = [new SubsonicId("shared")], Name = "Tool" },
-			new Artist { ExternalIds = [new MusicBrainzId("shared")], Name = "Puscifer" }
+			new Artist { ExternalIds = [new MusicBrainzArtistId("shared")], Name = "Puscifer" }
 		);
 
 		Assert.Equal(2, (await _catalogue.GetArtists(CancellationToken.None)).Count);
@@ -98,7 +98,7 @@ public sealed class SqliteCatalogueTests : IDisposable
 		await SaveArtists(tool, puscifer);
 		var split = new Album
 		{
-			ExternalIds = [new SubsonicId("alb-split"), new MusicBrainzId("mb-split")],
+			ExternalIds = [new SubsonicId("alb-split"), new MusicBrainzReleaseId("mb-split")],
 			Title = "Split",
 			Year = 2010,
 			IsCompilation = false,
@@ -109,7 +109,7 @@ public sealed class SqliteCatalogueTests : IDisposable
 		var album = Assert.Single(await _catalogue.GetAlbums(CancellationToken.None));
 
 		Assert.Equal(split.Id, album.Id);
-		Assert.Equal([new SubsonicId("alb-split"), new MusicBrainzId("mb-split")], album.ExternalIds);
+		Assert.Equal([new SubsonicId("alb-split"), new MusicBrainzReleaseId("mb-split")], album.ExternalIds);
 		Assert.Equal("Split", album.Title);
 		Assert.Equal(2010, album.Year);
 		Assert.False(album.IsCompilation);
@@ -259,7 +259,7 @@ public sealed class SqliteCatalogueTests : IDisposable
 		var puscifer = Artist("art-puscifer", "Puscifer");
 		await SaveArtists(tool, puscifer);
 		tool.Name = "TOOL";
-		tool.ExternalIds = [new SubsonicId("art-tool-rescanned"), new MusicBrainzId("mb-tool")];
+		tool.ExternalIds = [new SubsonicId("art-tool-rescanned"), new MusicBrainzArtistId("mb-tool")];
 
 		await _catalogue.SaveArtist(tool, CancellationToken.None);
 
@@ -267,7 +267,7 @@ public sealed class SqliteCatalogueTests : IDisposable
 		Assert.Equal([puscifer.Id, tool.Id], artists.Select(a => a.Id));
 		Assert.Equal(["Puscifer", "TOOL"], artists.Select(a => a.Name));
 		Assert.Equal([new SubsonicId("art-puscifer")], artists[0].ExternalIds);
-		Assert.Equal([new SubsonicId("art-tool-rescanned"), new MusicBrainzId("mb-tool")], artists[1].ExternalIds);
+		Assert.Equal([new SubsonicId("art-tool-rescanned"), new MusicBrainzArtistId("mb-tool")], artists[1].ExternalIds);
 	}
 
 	[Fact]
@@ -297,7 +297,7 @@ public sealed class SqliteCatalogueTests : IDisposable
 		split.Title = "Split EP";
 		split.Year = 2011;
 		split.IsCompilation = true;
-		split.ExternalIds = [new SubsonicId("alb-split-rescanned"), new MusicBrainzId("mb-split")];
+		split.ExternalIds = [new SubsonicId("alb-split-rescanned"), new MusicBrainzReleaseId("mb-split")];
 		split.Artists = [Credit(puscifer, 1), Credit(tool, 2)];
 
 		await _catalogue.SaveAlbum(split, CancellationToken.None);
@@ -309,7 +309,7 @@ public sealed class SqliteCatalogueTests : IDisposable
 		Assert.Equal(split.Id, albums[1].Id);
 		Assert.Equal(2011, albums[1].Year);
 		Assert.True(albums[1].IsCompilation);
-		Assert.Equal([new SubsonicId("alb-split-rescanned"), new MusicBrainzId("mb-split")], albums[1].ExternalIds);
+		Assert.Equal([new SubsonicId("alb-split-rescanned"), new MusicBrainzReleaseId("mb-split")], albums[1].ExternalIds);
 		Assert.Equal(["Puscifer", "Tool"], albums[1].Artists.Select(a => a.Artist.Name));
 	}
 

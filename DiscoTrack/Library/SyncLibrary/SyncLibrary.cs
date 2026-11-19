@@ -133,7 +133,7 @@ public class SyncLibrary(ICatalogue catalogue, ILibrarySource librarySource, ILo
 		return relinkedAlbums.Concat(orphanedAlbums).Concat(newAlbums).ToList();
 	}
 
-	private static T? Find<T>(ExternalId id, MusicBrainzId? musicBrainzId, IReadOnlyDictionary<ExternalId, T> lookup) where T : class
+	private static T? Find<T>(ExternalId id, ExternalId? musicBrainzId, IReadOnlyDictionary<ExternalId, T> lookup) where T : class
 	{
 		return lookup.GetValueOrDefault(id)
 			?? (musicBrainzId is null ? null : lookup.GetValueOrDefault(musicBrainzId));

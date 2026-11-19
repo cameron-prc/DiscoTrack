@@ -49,29 +49,29 @@ public class AlbumTests
 	{
 		var album = new Album { ExternalIds = [new SubsonicId("alb-lateralus")], Title = "Lateralus", Year = 2001 };
 
-		album.SetExternalIds([new MusicBrainzId("mb-lateralus")]);
+		album.SetExternalIds([new MusicBrainzReleaseId("mb-lateralus")]);
 
-		Assert.Equal([new SubsonicId("alb-lateralus"), new MusicBrainzId("mb-lateralus")], album.ExternalIds);
+		Assert.Equal([new SubsonicId("alb-lateralus"), new MusicBrainzReleaseId("mb-lateralus")], album.ExternalIds);
 	}
 
 	[Fact]
 	public void SetExternalIds_replaces_the_ids_from_the_same_provider()
 	{
-		var album = new Album { ExternalIds = [new SubsonicId("alb-lateralus"), new MusicBrainzId("mb-lateralus")], Title = "Lateralus", Year = 2001 };
+		var album = new Album { ExternalIds = [new SubsonicId("alb-lateralus"), new MusicBrainzReleaseId("mb-lateralus")], Title = "Lateralus", Year = 2001 };
 
 		album.SetExternalIds([new SubsonicId("alb-lateralus-rescanned")]);
 
-		Assert.Equal([new MusicBrainzId("mb-lateralus"), new SubsonicId("alb-lateralus-rescanned")], album.ExternalIds);
+		Assert.Equal([new MusicBrainzReleaseId("mb-lateralus"), new SubsonicId("alb-lateralus-rescanned")], album.ExternalIds);
 	}
 
 	[Fact]
 	public void SetExternalIds_holds_several_ids_from_one_provider()
 	{
-		var album = new Album { ExternalIds = [new SubsonicId("alb-lateralus"), new MusicBrainzId("mb-lateralus")], Title = "Lateralus", Year = 2001 };
+		var album = new Album { ExternalIds = [new SubsonicId("alb-lateralus"), new MusicBrainzReleaseId("mb-lateralus")], Title = "Lateralus", Year = 2001 };
 
 		album.SetExternalIds([new SubsonicId("alb-lateralus"), new SubsonicId("alb-lateralus-dupe")]);
 
-		Assert.Equal([new SubsonicId("alb-lateralus"), new MusicBrainzId("mb-lateralus"), new SubsonicId("alb-lateralus-dupe")], album.ExternalIds);
+		Assert.Equal([new SubsonicId("alb-lateralus"), new MusicBrainzReleaseId("mb-lateralus"), new SubsonicId("alb-lateralus-dupe")], album.ExternalIds);
 	}
 
 	[Fact]

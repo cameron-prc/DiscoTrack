@@ -11,21 +11,21 @@ internal static class Extensions
 	{
 		var artists = album.Credits().Select(a => a.ToLibraryArtist()).ToList();
 
-		return new(new SubsonicId(album.Id), album.Name, album.Year, album.IsCompilation, artists, ToMusicBrainzId(album.MusicBrainzId));
+		return new(new SubsonicId(album.Id), album.Name, album.Year, album.IsCompilation, artists, ToMusicBrainzReleaseId(album.MusicBrainzId));
 	}
 
 	public static LibraryArtist ToLibraryArtist(this ArtistID3 artist)
 	{
-		return new(new SubsonicId(artist.Id), artist.Name, ToMusicBrainzId(artist.MusicBrainzId));
+		return new(new SubsonicId(artist.Id), artist.Name, ToMusicBrainzArtistId(artist.MusicBrainzId));
 	}
 
-	private static MusicBrainzId? ToMusicBrainzId(string? value)
+	private static MusicBrainzArtistId? ToMusicBrainzArtistId(string? value)
 	{
-		if (string.IsNullOrEmpty(value))
-		{
-			return null;
-		}
+		return string.IsNullOrEmpty(value) ? null : new MusicBrainzArtistId(value);
+	}
 
-		return new MusicBrainzId(value);
+	private static MusicBrainzReleaseId? ToMusicBrainzReleaseId(string? value)
+	{
+		return string.IsNullOrEmpty(value) ? null : new MusicBrainzReleaseId(value);
 	}
 }
