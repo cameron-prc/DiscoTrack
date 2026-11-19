@@ -35,7 +35,7 @@ else
 			@foreach (var album in _albums)
 			{
 				<tr>
-					<td>@album.Title</td>
+					<td><a href="/albums/@album.Id">@album.Title</a></td>
 					<td>@album.Year</td>
 				</tr>
 			}

@@ -214,6 +214,88 @@ public sealed class SqliteCatalogueTests : IDisposable
 	}
 
 	[Fact]
+	public async Task GetArtist_returns_the_artist_with_only_its_own_external_ids()
+	{
+		var tool = new Artist { ExternalIds = [new SubsonicId("art-tool"), new MusicBrainzArtistId("mb-tool")], Name = "Tool" };
+		await SaveArtists(tool, Artist("art-puscifer", "Puscifer"));
+
+		var artist = await _catalogue.GetArtist(tool.Id, CancellationToken.None);
+
+		Assert.NotNull(artist);
+		Assert.Equal(tool.Id, artist.Id);
+		Assert.Equal("Tool", artist.Name);
+		Assert.Equal([new SubsonicId("art-tool"), new MusicBrainzArtistId("mb-tool")], artist.ExternalIds.OrderBy(id => id.Provider));
+	}
+
+	[Fact]
+	public async Task GetArtist_is_null_for_an_unknown_artist()
+	{
+		Assert.Null(await _catalogue.GetArtist(ArtistId.New(), CancellationToken.None));
+	}
+
+	[Fact]
+	public async Task GetAlbum_returns_the_album_with_its_credits_in_position_order_and_external_ids()
+	{
+		var tool = Artist("art-tool", "Tool");
+		var puscifer = Artist("art-puscifer", "Puscifer");
+		var shihad = Artist("art-shihad", "Shihad");
+		await SaveArtists(tool, puscifer, shihad);
+		var split = Album("alb-split", "Split", 2010, Credit(puscifer, 2), Credit(tool, 1));
+		await SaveAlbums(split, Album("alb-killjoy", "Killjoy", 1995, Credit(shihad, 1)));
+
+		var album = await _catalogue.GetAlbum(split.Id, CancellationToken.None);
+
+		Assert.NotNull(album);
+		Assert.Equal(split.Id, album.Id);
+		Assert.Equal("Split", album.Title);
+		Assert.Equal(2010, album.Year);
+		Assert.Equal([new SubsonicId("alb-split")], album.ExternalIds);
+		Assert.Equal(["Tool", "Puscifer"], album.Artists.Select(a => a.Artist.Name));
+		Assert.Equal([new SubsonicId("art-tool"), new SubsonicId("art-puscifer")], album.Artists.SelectMany(a => a.Artist.ExternalIds));
+	}
+
+	[Fact]
+	public async Task GetAlbum_returns_an_album_with_no_credits_as_an_empty_list()
+	{
+		var wanted = new Album { Title = "Wanted", Year = 1999 };
+		await SaveAlbums(wanted);
+
+		var album = await _catalogue.GetAlbum(wanted.Id, CancellationToken.None);
+
+		Assert.NotNull(album);
+		Assert.Empty(album.Artists);
+	}
+
+	[Fact]
+	public async Task GetAlbum_is_null_for_an_unknown_album()
+	{
+		Assert.Null(await _catalogue.GetAlbum(AlbumId.New(), CancellationToken.None));
+	}
+
+	[Fact]
+	public async Task GetAlbumArtists_returns_only_that_albums_artists_in_position_order_with_external_ids()
+	{
+		var tool = Artist("art-tool", "Tool");
+		var puscifer = Artist("art-puscifer", "Puscifer");
+		var shihad = Artist("art-shihad", "Shihad");
+		await SaveArtists(tool, puscifer, shihad);
+		var split = Album("alb-split", "Split", 2010, Credit(puscifer, 2), Credit(tool, 1));
+		await SaveAlbums(split, Album("alb-killjoy", "Killjoy", 1995, Credit(shihad, 1)));
+
+		var artists = await _catalogue.GetAlbumArtists(split.Id, CancellationToken.None);
+
+		Assert.Equal([tool.Id, puscifer.Id], artists.Select(a => a.Id));
+		Assert.Equal(["Tool", "Puscifer"], artists.Select(a => a.Name));
+		Assert.Equal([new SubsonicId("art-tool"), new SubsonicId("art-puscifer")], artists.SelectMany(a => a.ExternalIds));
+	}
+
+	[Fact]
+	public async Task GetAlbumArtists_is_empty_for_an_unknown_album()
+	{
+		Assert.Empty(await _catalogue.GetAlbumArtists(AlbumId.New(), CancellationToken.None));
+	}
+
+	[Fact]
 	public async Task SaveAlbum_rejects_an_album_crediting_an_artist_that_is_not_in_the_catalogue()
 	{
 		await Assert.ThrowsAsync<SqliteException>(

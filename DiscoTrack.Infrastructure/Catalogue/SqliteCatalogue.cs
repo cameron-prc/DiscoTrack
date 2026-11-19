@@ -54,6 +54,36 @@ public class SqliteCatalogue(IOptions<SqliteOptions> options) : ICatalogue
 		)
 		""";
 
+	private const string SelectArtist = "SELECT Id, Name FROM Artists WHERE Id = @ArtistId";
+
+	private const string SelectArtistExternalIdsByArtist = "SELECT ArtistId, Provider, Value FROM ArtistExternalIds WHERE ArtistId = @ArtistId";
+
+	private const string SelectAlbum = """
+		SELECT al.Id, al.Title, al.Year, al.IsCompilation,
+		       aa.Position, ar.Id AS ArtistId, ar.Name
+		FROM Albums al
+		LEFT JOIN AlbumArtists aa ON aa.AlbumId = al.Id
+		LEFT JOIN Artists ar ON ar.Id = aa.ArtistId
+		WHERE al.Id = @AlbumId
+		ORDER BY aa.Position
+		""";
+
+	private const string SelectAlbumExternalIdsByAlbum = "SELECT AlbumId, Provider, Value FROM AlbumExternalIds WHERE AlbumId = @AlbumId";
+
+	private const string SelectAlbumArtists = """
+		SELECT ar.Id, ar.Name
+		FROM Artists ar
+		JOIN AlbumArtists aa ON aa.ArtistId = ar.Id
+		WHERE aa.AlbumId = @AlbumId
+		ORDER BY aa.Position
+		""";
+
+	private const string SelectAlbumCreditExternalIds = """
+		SELECT ArtistId, Provider, Value
+		FROM ArtistExternalIds
+		WHERE ArtistId IN (SELECT ArtistId FROM AlbumArtists WHERE AlbumId = @AlbumId)
+		""";
+
 	private const string UpsertArtist = """
 		INSERT INTO Artists (Id, Name) VALUES (@Id, @Name)
 		ON CONFLICT (Id) DO UPDATE SET Name = excluded.Name
@@ -139,6 +169,54 @@ public class SqliteCatalogue(IOptions<SqliteOptions> options) : ICatalogue
 					albumExternalIds
 				)
 			)
+			.ToList();
+	}
+
+	public async Task<Artist?> GetArtist(ArtistId artistId, CancellationToken ct)
+	{
+		await using var connection = new SqliteConnection(_connectionString);
+		await connection.OpenAsync(ct);
+
+		var parameters = new { ArtistId = artistId };
+		var artist = await connection.QuerySingleOrDefaultAsync<ArtistDto>(SelectArtist, parameters);
+		var externalIds = (await connection.QueryAsync<ArtistExternalIdDto>(SelectArtistExternalIdsByArtist, parameters)).ToLookup();
+
+		return artist?.ToArtist(externalIds);
+	}
+
+	public async Task<Album?> GetAlbum(AlbumId albumId, CancellationToken ct)
+	{
+		await using var connection = new SqliteConnection(_connectionString);
+		await connection.OpenAsync(ct);
+
+		var parameters = new { AlbumId = albumId };
+		var rows = (await connection.QueryAsync<AlbumDto, AlbumArtistDto?, (AlbumDto Album, AlbumArtistDto? AlbumArtist)>(
+			SelectAlbum,
+			(album, albumArtist) => (album, albumArtist),
+			parameters,
+			splitOn: "Position")).ToList();
+		var albumExternalIds = (await connection.QueryAsync<AlbumExternalIdDto>(SelectAlbumExternalIdsByAlbum, parameters)).ToLookup();
+		var artistExternalIds = (await connection.QueryAsync<ArtistExternalIdDto>(SelectAlbumCreditExternalIds, parameters)).ToLookup();
+
+		return rows.FirstOrDefault().Album?.ToAlbum(
+			rows.Where(r => r.AlbumArtist is not null)
+				.Select(r => r.AlbumArtist!.ToAlbumArtist(artistExternalIds))
+				.ToList(),
+			albumExternalIds
+		);
+	}
+
+	public async Task<IReadOnlyList<Artist>> GetAlbumArtists(AlbumId albumId, CancellationToken ct)
+	{
+		await using var connection = new SqliteConnection(_connectionString);
+		await connection.OpenAsync(ct);
+
+		var parameters = new { AlbumId = albumId };
+		var artists = await connection.QueryAsync<ArtistDto>(SelectAlbumArtists, parameters);
+		var externalIds = (await connection.QueryAsync<ArtistExternalIdDto>(SelectAlbumCreditExternalIds, parameters)).ToLookup();
+
+		return artists
+			.Select(a => a.ToArtist(externalIds))
 			.ToList();
 	}
 

@@ -1,0 +1,49 @@
+@page "/albums/{Id:guid}"
+@using DiscoTrack.ExternalIds
+@inject ICatalogue Catalogue
+
+@if (_loading)
+{
+	<p>Loading</p>
+}
+else if (_album is null)
+{
+	<PageTitle>Album not found</PageTitle>
+	<h1>Album not found</h1>
+}
+else
+{
+	<PageTitle>@_album.Title</PageTitle>
+	<h1>@_album.Artists.First().Artist.Name</h1>
+	<h2>@_album.Title (@_album.Year)</h2>
+	<ul>
+		<li>local: @_album.Id</li>
+		@foreach (var externalId in _album.ExternalIds)
+		{
+			<li>@externalId.Provider: @externalId.Value</li>
+		}
+	</ul>
+}
+
+@code {
+	[Parameter]
+	public Guid Id { get; set; }
+
+	private bool _loading = true;
+	private Album? _album;
+	private IReadOnlyList<Artist> _artists = [];
+	private IReadOnlyList<ExternalId> _externalIds = [];
+
+	protected override async Task OnInitializedAsync()
+	{
+		var albumId = new AlbumId(Id);
+		_album = await Catalogue.GetAlbum(albumId, CancellationToken.None);
+		_externalIds = _album.ExternalIds;
+		if (_album is not null)
+		{
+			//_artists = await Catalogue.GetArtistAlbums(albumId, CancellationToken.None);
+
+		}
+		_loading = false;
+	}
+}

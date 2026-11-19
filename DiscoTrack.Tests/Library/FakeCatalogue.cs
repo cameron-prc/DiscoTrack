@@ -29,6 +29,24 @@ internal sealed class FakeCatalogue : ICatalogue
 		return Task.FromResult<IReadOnlyList<Album>>(Albums.Where(a => a.Artists.Any(c => c.Artist.Id == artistId)).ToList());
 	}
 
+	public Task<Artist?> GetArtist(ArtistId artistId, CancellationToken ct)
+	{
+		Record(nameof(GetArtist));
+		return Task.FromResult(Artists.FirstOrDefault(a => a.Id == artistId));
+	}
+
+	public Task<Album?> GetAlbum(AlbumId albumId, CancellationToken ct)
+	{
+		Record(nameof(GetAlbum));
+		return Task.FromResult(Albums.FirstOrDefault(a => a.Id == albumId));
+	}
+
+	public Task<IReadOnlyList<Artist>> GetAlbumArtists(AlbumId albumId, CancellationToken ct)
+	{
+		Record(nameof(GetAlbumArtists));
+		return Task.FromResult<IReadOnlyList<Artist>>(Albums.Where(a => a.Id == albumId).SelectMany(a => a.Artists).OrderBy(c => c.Position).Select(c => c.Artist).ToList());
+	}
+
 	public Task SaveArtist(Artist artist, CancellationToken ct)
 	{
 		Record(nameof(SaveArtist));
