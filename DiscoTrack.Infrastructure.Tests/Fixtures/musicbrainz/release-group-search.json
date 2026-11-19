@@ -1,0 +1,71 @@
+{
+  "created": "2026-11-19T01:18:51.291Z",
+  "count": 2,
+  "offset": 0,
+  "release-groups": [
+    {
+      "id": "44abaa3a-4c87-4034-9e03-bd5a3cd3136b",
+      "title": "Lateralus",
+      "first-release-date": "2002-02",
+      "primary-type": "Single",
+      "artist-credit": [
+        {
+          "name": "Tool",
+          "joinphrase": "",
+          "artist": {
+            "id": "66fc5bf8-daa4-4241-b378-9bc9077939d2",
+            "name": "Tool",
+            "sort-name": "Tool",
+            "disambiguation": "American rock band"
+          }
+        }
+      ],
+      "score": 100,
+      "count": 1,
+      "releases": [
+        {
+          "id": "3c583861-4e54-4b9c-a518-ad313b0383f5",
+          "title": "Lateralus",
+          "status": "Promotion"
+        }
+      ]
+    },
+    {
+      "id": "02f79295-21e1-34cc-82f2-63219eec4f0a",
+      "title": "Lateralus",
+      "first-release-date": "2001-05-14",
+      "primary-type": "Album",
+      "artist-credit": [
+        {
+          "name": "Tool",
+          "joinphrase": "",
+          "artist": {
+            "id": "66fc5bf8-daa4-4241-b378-9bc9077939d2",
+            "name": "Tool",
+            "sort-name": "Tool",
+            "disambiguation": "American rock band"
+          }
+        }
+      ],
+      "score": 100,
+      "count": 13,
+      "releases": [
+        {
+          "id": "ea5777f4-867b-4ce2-bfa9-8f3a2239812d",
+          "title": "Lateralus",
+          "status": "Official"
+        },
+        {
+          "id": "7cd19f01-41b1-4e13-9b16-064938ac52ba",
+          "title": "Lateralus",
+          "status": "Official"
+        },
+        {
+          "id": "e6f4d5e3-9b27-4f54-a7f6-0f7f76ed1485",
+          "title": "Lateralus",
+          "status": "Official"
+        }
+      ]
+    }
+  ]
+}

@@ -1,8 +1,12 @@
 using DiscoTrack.Catalogue;
+using DiscoTrack.Discography;
 using DiscoTrack.Infrastructure.Catalogue;
+using DiscoTrack.Infrastructure.Clients.MusicBrainz;
 using DiscoTrack.Infrastructure.Clients.Subsonic;
+using DiscoTrack.Infrastructure.Discography;
 using DiscoTrack.Infrastructure.Jobs;
 using DiscoTrack.Infrastructure.Sqlite;
+using DiscoTrack.Infrastructure.Tests.Clients.MusicBrainz;
 using DiscoTrack.Infrastructure.Tests.Clients.Subsonic;
 using DiscoTrack.Jobs;
 using Microsoft.Extensions.Configuration;
@@ -30,6 +34,49 @@ public class DependencyInjectionTests
 		var options = BuildSubsonicOptions(25);
 
 		Assert.Equal(25, options.Value.PageSize);
+	}
+
+	[Fact]
+	public void AddMusicBrainzDiscographySource_resolves_a_discography_source()
+	{
+		using var provider = BuildMusicBrainzProvider(TestMusicBrainzOptions.Contact);
+		using var scope = provider.CreateScope();
+
+		var source = scope.ServiceProvider.GetRequiredService<IDiscographySource>();
+
+		Assert.IsType<MusicBrainzDiscographySource>(source);
+	}
+
+	[Fact]
+	public void AddMusicBrainzDiscographySource_identifies_the_application_and_contact_to_musicbrainz()
+	{
+		using var provider = BuildMusicBrainzProvider(TestMusicBrainzOptions.Contact);
+
+		var http = provider.GetRequiredService<IHttpClientFactory>().CreateClient(nameof(IMusicBrainzClient));
+
+		Assert.Equal(new Uri(TestMusicBrainzOptions.BaseUrl), http.BaseAddress);
+		Assert.Matches($@"^DiscoTrack/\d+\.\d+\.\d+ \({TestMusicBrainzOptions.Contact}\)$", http.DefaultRequestHeaders.UserAgent.ToString());
+	}
+
+	[Fact]
+	public void AddMusicBrainzDiscographySource_shares_one_rate_limiter_across_scopes()
+	{
+		using var provider = BuildMusicBrainzProvider(TestMusicBrainzOptions.Contact);
+		using var first = provider.CreateScope();
+		using var second = provider.CreateScope();
+
+		var rateLimiter = first.ServiceProvider.GetRequiredService<IMusicBrainzRateLimiter>();
+
+		Assert.Same(rateLimiter, second.ServiceProvider.GetRequiredService<IMusicBrainzRateLimiter>());
+	}
+
+	[Fact]
+	public void AddMusicBrainzDiscographySource_rejects_a_missing_contact()
+	{
+		using var provider = BuildMusicBrainzProvider(contact: null);
+
+		var ex = Assert.Throws<OptionsValidationException>(() => provider.GetRequiredService<IOptions<MusicBrainzOptions>>().Value);
+		Assert.Contains("Contact", ex.Message);
 	}
 
 	[Fact]
@@ -76,6 +123,21 @@ public class DependencyInjectionTests
 		return new ServiceCollection()
 			.AddSqlite(configuration)
 			.AddSqliteCatalogue()
+			.BuildServiceProvider();
+	}
+
+	private static ServiceProvider BuildMusicBrainzProvider(string? contact)
+	{
+		var configuration = new ConfigurationBuilder()
+			.AddInMemoryCollection(new Dictionary<string, string?>
+			{
+				[$"{MusicBrainzOptions.Section}:BaseUrl"] = TestMusicBrainzOptions.BaseUrl,
+				[$"{MusicBrainzOptions.Section}:Contact"] = contact,
+			})
+			.Build();
+
+		return new ServiceCollection()
+			.AddMusicBrainzDiscographySource(configuration)
 			.BuildServiceProvider();
 	}
 

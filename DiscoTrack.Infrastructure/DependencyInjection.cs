@@ -1,6 +1,9 @@
 using DiscoTrack.Catalogue;
+using DiscoTrack.Discography;
 using DiscoTrack.Infrastructure.Catalogue;
+using DiscoTrack.Infrastructure.Clients.MusicBrainz;
 using DiscoTrack.Infrastructure.Clients.Subsonic;
+using DiscoTrack.Infrastructure.Discography;
 using DiscoTrack.Infrastructure.Jobs;
 using DiscoTrack.Infrastructure.Library;
 using DiscoTrack.Infrastructure.Sqlite;
@@ -8,6 +11,7 @@ using DiscoTrack.Jobs;
 using DiscoTrack.Library;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 
 namespace DiscoTrack.Infrastructure;
@@ -23,6 +27,28 @@ public static class DependencyInjection
 		services.AddHttpClient<ISubsonicClient, SubsonicClient>((provider, http) =>
 			http.BaseAddress = new Uri(provider.GetRequiredService<IOptions<SubsonicOptions>>().Value.BaseUrl.TrimEnd('/') + "/"));
 		services.AddScoped<ILibrarySource, SubsonicLibrarySource>();
+		return services;
+	}
+
+	public static IServiceCollection AddMusicBrainzDiscographySource(this IServiceCollection services, IConfiguration configuration)
+	{
+		services.AddOptions<MusicBrainzOptions>()
+			.Bind(configuration.GetSection(MusicBrainzOptions.Section))
+			.ValidateDataAnnotations()
+			.ValidateOnStart();
+		services.TryAddSingleton(TimeProvider.System);
+		services.AddSingleton<IMusicBrainzRateLimiter, MusicBrainzRateLimiter>();
+		services.AddTransient<MusicBrainzRateLimitHandler>();
+		services.AddHttpClient<IMusicBrainzClient, MusicBrainzClient>((provider, http) =>
+			{
+				var options = provider.GetRequiredService<IOptions<MusicBrainzOptions>>().Value;
+				var version = typeof(DependencyInjection).Assembly.GetName().Version?.ToString(3);
+
+				http.BaseAddress = new Uri(options.BaseUrl.TrimEnd('/') + "/");
+				http.DefaultRequestHeaders.UserAgent.ParseAdd($"{options.ApplicationName}/{version} ({options.Contact})");
+			})
+			.AddHttpMessageHandler<MusicBrainzRateLimitHandler>();
+		services.AddScoped<IDiscographySource, MusicBrainzDiscographySource>();
 		return services;
 	}
 

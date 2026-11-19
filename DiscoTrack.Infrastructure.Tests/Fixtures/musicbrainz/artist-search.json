@@ -1,0 +1,32 @@
+{
+  "created": "2026-11-19T01:18:48.202Z",
+  "count": 51,
+  "offset": 0,
+  "artists": [
+    {
+      "id": "66fc5bf8-daa4-4241-b378-9bc9077939d2",
+      "name": "Tool",
+      "sort-name": "Tool",
+      "disambiguation": "American rock band",
+      "country": "US",
+      "type": "Group",
+      "score": 100
+    },
+    {
+      "id": "bbfa1e12-8b61-4ed8-bc6e-52d2298f41a2",
+      "name": "Tool",
+      "sort-name": "Tool",
+      "disambiguation": "90s trance DJ Thomas Büttner, aka DJ Tool",
+      "type": "Person",
+      "score": 72
+    },
+    {
+      "id": "2e0ebdf9-e280-4900-b0f9-b5494dc9e960",
+      "name": "Tool",
+      "sort-name": "Tool",
+      "disambiguation": "Seattle band",
+      "type": "Group",
+      "score": 70
+    }
+  ]
+}

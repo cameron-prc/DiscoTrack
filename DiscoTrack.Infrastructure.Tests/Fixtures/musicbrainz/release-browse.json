@@ -1,0 +1,27 @@
+{
+  "release-count": 13,
+  "release-offset": 0,
+  "releases": [
+    {
+      "id": "451df9bc-1ba2-453c-9c60-9537a5f3c6e3",
+      "title": "Lateralus",
+      "status": "Official",
+      "date": "2001-05-14",
+      "country": "DE"
+    },
+    {
+      "id": "579278d5-75dc-4d2f-a5f3-6cc86f6c510e",
+      "title": "Lateralus",
+      "status": "Official",
+      "date": "2001-05-14",
+      "country": "DE"
+    },
+    {
+      "id": "a2e824b6-7b14-32ef-b990-482b53291f93",
+      "title": "Lateralus",
+      "status": "Official",
+      "date": "2001-05-14",
+      "country": "US"
+    }
+  ]
+}

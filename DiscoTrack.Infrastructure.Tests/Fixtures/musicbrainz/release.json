@@ -1,0 +1,41 @@
+{
+  "id": "ea5777f4-867b-4ce2-bfa9-8f3a2239812d",
+  "title": "Lateralus",
+  "status": "Official",
+  "date": "2019-08-02",
+  "country": "XW",
+  "artist-credit": [
+    {
+      "name": "Tool",
+      "joinphrase": "",
+      "artist": {
+        "id": "66fc5bf8-daa4-4241-b378-9bc9077939d2",
+        "name": "Tool",
+        "sort-name": "Tool",
+        "disambiguation": "American rock band",
+        "country": "US",
+        "type": "Group"
+      }
+    }
+  ],
+  "release-group": {
+    "id": "02f79295-21e1-34cc-82f2-63219eec4f0a",
+    "title": "Lateralus",
+    "first-release-date": "2001-05-14",
+    "primary-type": "Album",
+    "artist-credit": [
+      {
+        "name": "Tool",
+        "joinphrase": "",
+        "artist": {
+          "id": "66fc5bf8-daa4-4241-b378-9bc9077939d2",
+          "name": "Tool",
+          "sort-name": "Tool",
+          "disambiguation": "American rock band",
+          "country": "US",
+          "type": "Group"
+        }
+      }
+    ]
+  }
+}
