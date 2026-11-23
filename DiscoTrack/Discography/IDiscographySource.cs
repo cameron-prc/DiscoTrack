@@ -4,8 +4,11 @@ namespace DiscoTrack.Discography;
 
 public interface IDiscographySource
 {
-	Task<DiscographyAlbum?> GetAlbum(MusicBrainzReleaseId releaseId, CancellationToken ct);
-	Task<DiscographyAlbum?> GetAlbum(MusicBrainzReleaseGroupId releaseGroupId, CancellationToken ct);
-	Task<IReadOnlyList<DiscographyAlbum>> SearchAlbums(MusicBrainzArtistId artistId, string title, CancellationToken ct);
+	Provider ReleaseProvider { get; }
+	Provider ReleaseGroupProvider { get; }
+	Provider ArtistProvider { get; }
+
+	Task<DiscographyAlbum?> GetAlbum(ExternalId id, CancellationToken ct);
+	Task<IReadOnlyList<DiscographyAlbum>> SearchAlbums(ExternalId artistId, string title, CancellationToken ct);
 	Task<IReadOnlyList<DiscographyArtist>> SearchArtists(string name, CancellationToken ct);
 }

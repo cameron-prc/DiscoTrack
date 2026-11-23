@@ -8,6 +8,11 @@ public class Artist
 	public IReadOnlyList<ExternalId> ExternalIds { get; set; } = [];
 	public required string Name { get; set; }
 
+	public void SetExternalId(ExternalId externalId)
+	{
+		SetExternalIds([externalId]);
+	}
+
 	public void SetExternalIds(IReadOnlyCollection<ExternalId> externalIds)
 	{
 		var providers = externalIds.Select(externalId => externalId.Provider).ToHashSet();

@@ -12,7 +12,32 @@ public partial class MusicBrainzDiscographySource(IMusicBrainzClient client, IOp
 	private readonly int _pageSize = options.Value.PageSize;
 	private readonly int _searchSize = options.Value.SearchSize;
 
-	public async Task<DiscographyAlbum?> GetAlbum(MusicBrainzReleaseId releaseId, CancellationToken ct)
+	public Provider ReleaseProvider
+	{
+		get { return Provider.MusicBrainzRelease; }
+	}
+
+	public Provider ReleaseGroupProvider
+	{
+		get { return Provider.MusicBrainzReleaseGroup; }
+	}
+
+	public Provider ArtistProvider
+	{
+		get { return Provider.MusicBrainzArtist; }
+	}
+
+	public Task<DiscographyAlbum?> GetAlbum(ExternalId id, CancellationToken ct)
+	{
+		return id switch
+		{
+			MusicBrainzReleaseId releaseId => GetAlbum(releaseId, ct),
+			MusicBrainzReleaseGroupId releaseGroupId => GetAlbum(releaseGroupId, ct),
+			_ => throw new ArgumentException($"{id.Provider} is not a MusicBrainz release or release group id", nameof(id)),
+		};
+	}
+
+	private async Task<DiscographyAlbum?> GetAlbum(MusicBrainzReleaseId releaseId, CancellationToken ct)
 	{
 		var release = await client.GetRelease(releaseId.Value, ct);
 		if (release?.ReleaseGroup is null)
@@ -23,7 +48,7 @@ public partial class MusicBrainzDiscographySource(IMusicBrainzClient client, IOp
 		return release.ReleaseGroup.ToDiscographyAlbum(await GetReleases(release.ReleaseGroup.Id, ct));
 	}
 
-	public async Task<DiscographyAlbum?> GetAlbum(MusicBrainzReleaseGroupId releaseGroupId, CancellationToken ct)
+	private async Task<DiscographyAlbum?> GetAlbum(MusicBrainzReleaseGroupId releaseGroupId, CancellationToken ct)
 	{
 		var releaseGroup = await client.GetReleaseGroup(releaseGroupId.Value, ct);
 		if (releaseGroup is null)
@@ -34,7 +59,16 @@ public partial class MusicBrainzDiscographySource(IMusicBrainzClient client, IOp
 		return releaseGroup.ToDiscographyAlbum(await GetReleases(releaseGroup.Id, ct));
 	}
 
-	public async Task<IReadOnlyList<DiscographyAlbum>> SearchAlbums(MusicBrainzArtistId artistId, string title, CancellationToken ct)
+	public Task<IReadOnlyList<DiscographyAlbum>> SearchAlbums(ExternalId artistId, string title, CancellationToken ct)
+	{
+		return artistId switch
+		{
+			MusicBrainzArtistId musicBrainzArtistId => SearchAlbums(musicBrainzArtistId, title, ct),
+			_ => throw new ArgumentException($"{artistId.Provider} is not a MusicBrainz artist id", nameof(artistId)),
+		};
+	}
+
+	private async Task<IReadOnlyList<DiscographyAlbum>> SearchAlbums(MusicBrainzArtistId artistId, string title, CancellationToken ct)
 	{
 		var releaseGroups = await client.SearchReleaseGroups($"arid:{artistId.Value} AND releasegroup:\"{Escape(title)}\"", _searchSize, 0, ct);
 

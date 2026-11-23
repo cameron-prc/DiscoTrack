@@ -1,4 +1,5 @@
 using DiscoTrack.Catalogue;
+using DiscoTrack.Discography;
 using DiscoTrack.Jobs;
 using DiscoTrack.Jobs.JobHandlers;
 using DiscoTrack.Library;
@@ -23,11 +24,32 @@ public class DependencyInjectionTests
 		Assert.IsType<SyncLibraryJobHandler>(handler);
 	}
 
+	[Fact]
+	public void AddJobs_resolves_the_sync_discography_album_handler()
+	{
+		using var scope = BuildProvider().CreateScope();
+
+		var handler = scope.ServiceProvider.GetRequiredService<ISyncAlbumWithDiscographyJobHandler>();
+
+		Assert.IsType<SyncAlbumWithDiscographyJobHandler>(handler);
+	}
+
+	[Fact]
+	public void AddJobs_resolves_the_discography_album_resolver()
+	{
+		using var scope = BuildProvider().CreateScope();
+
+		var resolver = scope.ServiceProvider.GetRequiredService<IDiscographyAlbumResolver>();
+
+		Assert.IsType<DiscographyAlbumResolver>(resolver);
+	}
+
 	private static ServiceProvider BuildProvider()
 	{
 		return new ServiceCollection()
 			.AddSingleton(Mock.Of<ICatalogue>())
 			.AddSingleton(Mock.Of<ILibrarySource>())
+			.AddSingleton(Mock.Of<IDiscographySource>())
 			.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>))
 			.AddJobs()
 			.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });

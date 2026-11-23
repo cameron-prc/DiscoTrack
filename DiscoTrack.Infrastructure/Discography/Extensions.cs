@@ -6,14 +6,19 @@ namespace DiscoTrack.Infrastructure.Discography;
 
 internal static class Extensions
 {
+	private const string VariousArtistsId = "89ad4ac3-39f7-470e-963a-56509c546377";
+
 	public static DiscographyAlbum ToDiscographyAlbum(this ReleaseGroup releaseGroup, IReadOnlyList<Release> releases)
 	{
+		var credits = releaseGroup.ArtistCredit ?? [];
+
 		return new(
 			new MusicBrainzReleaseGroupId(releaseGroup.Id),
-			releases.Select(release => new MusicBrainzReleaseId(release.Id)).ToList(),
+			releases.Select(ExternalId (release) => new MusicBrainzReleaseId(release.Id)).ToList(),
 			releaseGroup.Title,
 			ToYear(releaseGroup.FirstReleaseDate),
-			(releaseGroup.ArtistCredit ?? []).Select(credit => credit.ToDiscographyArtist()).ToList());
+			credits.Any(credit => credit.Artist.Id == VariousArtistsId),
+			credits.Select(credit => credit.ToDiscographyArtist()).ToList());
 	}
 
 	public static DiscographyArtist ToDiscographyArtist(this ArtistCredit credit)

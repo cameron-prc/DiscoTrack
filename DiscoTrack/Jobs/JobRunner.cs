@@ -5,25 +5,25 @@ namespace DiscoTrack.Jobs;
 
 public class JobRunner : IJobRunner
 {
-	private readonly IJobHandler _syncLibraryHandler;
+	private readonly ISyncLibraryHandler _syncLibraryHandler;
+	private readonly ISyncAlbumWithDiscographyJobHandler _syncAlbumWithDiscographyJobHandler;
 	private readonly ILogger<JobRunner> _logger;
 
-	public JobRunner(ISyncLibraryHandler syncLibraryHandler, ILogger<JobRunner> logger)
+	public JobRunner(ISyncLibraryHandler syncLibraryHandler, ISyncAlbumWithDiscographyJobHandler syncAlbumWithDiscographyJobHandler, ILogger<JobRunner> logger)
 	{
 		_syncLibraryHandler = syncLibraryHandler;
+		_syncAlbumWithDiscographyJobHandler = syncAlbumWithDiscographyJobHandler;
 		_logger = logger;
 	}
 
 	public async Task Start(Job job, CancellationToken cancellationToken)
 	{
-		var handler = GetHandler(job.Type);
-
 		job.MarkAsStarted();
 		_logger.LogInformation("{JobType} job {JobId} started", job.Type, job.Id);
 
 		try
 		{
-			await handler.Execute(cancellationToken);
+			await Execute(job, cancellationToken);
 			job.MarkAsCompleted();
 			_logger.LogInformation("{JobType} job {JobId} completed", job.Type, job.Id);
 		}
@@ -39,11 +39,14 @@ public class JobRunner : IJobRunner
 		}
 	}
 
-	private IJobHandler GetHandler(JobType jobType)
+	private Task Execute(Job job, CancellationToken cancellationToken)
 	{
-		return jobType switch
+		return job.Type switch
 		{
-			JobType.SyncLibrary => _syncLibraryHandler
+			JobType.SyncLibrary => _syncLibraryHandler.Execute(cancellationToken),
+			JobType.SyncAlbumWithDiscography when job.AlbumId is { } albumId => _syncAlbumWithDiscographyJobHandler.Execute(albumId, cancellationToken),
+			JobType.SyncAlbumWithDiscography => throw new InvalidOperationException($"{job.Type} job {job.Id} has no album id"),
+			_ => throw new InvalidOperationException($"No handler for {job.Type} job {job.Id}"),
 		};
 	}
 }

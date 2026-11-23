@@ -1,3 +1,4 @@
+using DiscoTrack.Albums;
 using DiscoTrack.Jobs;
 using DiscoTrack.Jobs.JobHandlers;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -8,10 +9,34 @@ namespace DiscoTrack.Tests.Jobs;
 public class JobRunnerTests
 {
 	private readonly Mock<ISyncLibraryHandler> _handler = new();
+	private readonly Mock<ISyncAlbumWithDiscographyJobHandler> _discographyHandler = new();
 
 	private JobRunner Runner()
 	{
-		return new JobRunner(_handler.Object, NullLogger<JobRunner>.Instance);
+		return new JobRunner(_handler.Object, _discographyHandler.Object, NullLogger<JobRunner>.Instance);
+	}
+
+	[Fact]
+	public async Task Runs_the_sync_discography_album_handler_with_the_jobs_album_id()
+	{
+		var albumId = AlbumId.New();
+		using var cts = new CancellationTokenSource();
+
+		await Runner().Start(new Job(JobType.SyncAlbumWithDiscography, albumId), cts.Token);
+
+		_discographyHandler.Verify(h => h.Execute(albumId, cts.Token), Times.Once);
+		_handler.Verify(h => h.Execute(It.IsAny<CancellationToken>()), Times.Never);
+	}
+
+	[Fact]
+	public async Task Fails_a_sync_discography_album_job_that_has_no_album_id()
+	{
+		var job = new Job(JobType.SyncAlbumWithDiscography);
+
+		await Runner().Start(job, CancellationToken.None);
+
+		Assert.Equal(JobStatus.Failed, job.Status);
+		_discographyHandler.Verify(h => h.Execute(It.IsAny<AlbumId>(), It.IsAny<CancellationToken>()), Times.Never);
 	}
 
 	[Fact]

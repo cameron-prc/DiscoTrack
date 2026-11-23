@@ -42,6 +42,7 @@ public class MusicBrainzDiscographySourceTests
 		Assert.Equal([new MusicBrainzReleaseId("rel-lateralus-cd"), new MusicBrainzReleaseId("rel-lateralus-vinyl")], album.ReleaseIds);
 		Assert.Equal("Lateralus", album.Title);
 		Assert.Equal(2001, album.Year);
+		Assert.False(album.IsCompilation);
 		Assert.Equal([new DiscographyArtist(new MusicBrainzArtistId("mb-tool"), "Tool", "American rock band")], album.Artists);
 	}
 
@@ -114,6 +115,19 @@ public class MusicBrainzDiscographySourceTests
 			album!.Artists);
 	}
 
+	[Fact]
+	public async Task GetAlbum_is_a_compilation_when_credited_to_various_artists()
+	{
+		var variousArtists = new Artist { Id = "89ad4ac3-39f7-470e-963a-56509c546377", Name = "Various Artists" };
+		_client.Setup(client => client.GetReleaseGroup("rg-lateralus", It.IsAny<CancellationToken>()))
+			.ReturnsAsync(Lateralus with { ArtistCredit = [new ArtistCredit { Name = "Various Artists", Artist = variousArtists }] });
+		SetupReleases("rg-lateralus");
+
+		var album = await Source().GetAlbum(new MusicBrainzReleaseGroupId("rg-lateralus"), CancellationToken.None);
+
+		Assert.True(album!.IsCompilation);
+	}
+
 	[Theory]
 	[InlineData("2001-05-14", 2001)]
 	[InlineData("2002-02", 2002)]
@@ -169,6 +183,14 @@ public class MusicBrainzDiscographySourceTests
 		Assert.Equal(new MusicBrainzReleaseGroupId("rg-lateralus-single"), albums[1].ReleaseGroupId);
 		Assert.Empty(albums[1].ReleaseIds);
 		Assert.Equal(2002, albums[1].Year);
+	}
+
+	[Fact]
+	public async Task SearchAlbums_rejects_an_artist_id_that_is_not_a_MusicBrainz_artist_id()
+	{
+		await Assert.ThrowsAsync<ArgumentException>(() => Source().SearchAlbums(new SubsonicId("art-tool"), "Lateralus", CancellationToken.None));
+
+		_client.Verify(client => client.SearchReleaseGroups(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
 	}
 
 	[Fact]

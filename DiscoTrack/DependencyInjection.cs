@@ -1,3 +1,5 @@
+using DiscoTrack.Discography;
+using DiscoTrack.Discography.SyncAlbumWithDiscography;
 using DiscoTrack.Jobs;
 using DiscoTrack.Jobs.JobHandlers;
 using DiscoTrack.Library.SyncLibrary;
@@ -11,6 +13,9 @@ public static class DependencyInjection
 	{
 		services.AddScoped<SyncLibrary>();
 		services.AddScoped<ISyncLibraryHandler, SyncLibraryJobHandler>();
+		services.AddScoped<IDiscographyAlbumResolver, DiscographyAlbumResolver>();
+		services.AddScoped<ISyncAlbumWithDiscographyService,SyncAlbumWithDiscographyService>();
+		services.AddScoped<ISyncAlbumWithDiscographyJobHandler, SyncAlbumWithDiscographyJobHandler>();
 		services.AddScoped<IJobRunner, JobRunner>();
 		return services;
 	}

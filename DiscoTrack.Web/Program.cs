@@ -14,6 +14,7 @@ builder.Services
 	.AddSqlite(builder.Configuration)
 	.AddSqliteCatalogue()
 	.AddSubsonicLibrarySource(builder.Configuration)
+	.AddMusicBrainzDiscographySource(builder.Configuration)
 	.AddJobs()
 	.AddInMemoryJobQueue()
 	.AddJobBackgroundService();

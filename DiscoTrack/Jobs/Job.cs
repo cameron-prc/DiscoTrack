@@ -1,3 +1,5 @@
+using DiscoTrack.Albums;
+
 namespace DiscoTrack.Jobs;
 
 public class Job
@@ -5,18 +7,20 @@ public class Job
 	public Guid Id { get; }
 	public JobStatus Status { get; private set; }
 	public JobType Type { get; }
+	public AlbumId? AlbumId { get; }
 
 	public DateTime CreatedAt { get; }
 	public DateTime UpdatedAt { get; private set; }
 	public DateTime? StartedAt { get; private set; }
 	public DateTime? FinishedAt { get; private set; }
 
-	public Job(JobType jobType)
+	public Job(JobType jobType, AlbumId? albumId = null)
 	{
 		var now = DateTime.UtcNow;
 
 		Id = Guid.CreateVersion7();
 		Type = jobType;
+		AlbumId = albumId;
 		Status = JobStatus.Pending;
 
 		CreatedAt = now;
