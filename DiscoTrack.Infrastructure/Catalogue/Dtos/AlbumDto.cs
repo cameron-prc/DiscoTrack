@@ -8,4 +8,5 @@ internal sealed class AlbumDto
 	public required string Title { get; init; }
 	public int Year { get; init; }
 	public bool IsCompilation { get; init; }
+	public bool Tracked { get; init; }
 }

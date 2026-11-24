@@ -49,6 +49,16 @@ public class SyncLibraryTests
 	}
 
 	[Fact]
+	public async Task Imports_a_new_album_as_tracked()
+	{
+		_source.Albums.Add(Album("alb-odelay", "Odelay", 1996, Beck));
+
+		await Sync().Run(CancellationToken.None);
+
+		Assert.True(Assert.Single(_catalogue.Albums).Tracked);
+	}
+
+	[Fact]
 	public async Task Maps_album_fields_and_one_based_credit_positions()
 	{
 		_source.Albums.Add(Album("alb-split", "Split", 2010, TheChecks, Beck));

@@ -26,6 +26,7 @@ internal static class Extensions
 			Title = album.Title,
 			Year = album.Year,
 			IsCompilation = album.IsCompilation,
+			Tracked = album.Tracked,
 			Artists = artists,
 		};
 	}
@@ -66,6 +67,7 @@ internal static class Extensions
 			Title = album.Title,
 			Year = album.Year,
 			IsCompilation = album.IsCompilation,
+			Tracked = album.Tracked,
 		};
 	}
 

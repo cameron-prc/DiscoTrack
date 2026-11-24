@@ -17,7 +17,7 @@ public class SqliteCatalogue(IOptions<SqliteOptions> options) : ICatalogue
 	private const string SelectArtistExternalIds = "SELECT ArtistId, Provider, Value FROM ArtistExternalIds";
 
 	private const string SelectAlbums = """
-		SELECT al.Id, al.Title, al.Year, al.IsCompilation,
+		SELECT al.Id, al.Title, al.Year, al.IsCompilation, al.Tracked,
 		       aa.Position, ar.Id AS ArtistId, ar.Name
 		FROM Albums al
 		LEFT JOIN AlbumArtists aa ON aa.AlbumId = al.Id
@@ -28,7 +28,7 @@ public class SqliteCatalogue(IOptions<SqliteOptions> options) : ICatalogue
 	private const string SelectAlbumExternalIds = "SELECT AlbumId, Provider, Value FROM AlbumExternalIds";
 
 	private const string SelectArtistAlbums = """
-		SELECT al.Id, al.Title, al.Year, al.IsCompilation,
+		SELECT al.Id, al.Title, al.Year, al.IsCompilation, al.Tracked,
 		       aa.Position, ar.Id AS ArtistId, ar.Name
 		FROM Albums al
 		JOIN AlbumArtists aa ON aa.AlbumId = al.Id
@@ -59,7 +59,7 @@ public class SqliteCatalogue(IOptions<SqliteOptions> options) : ICatalogue
 	private const string SelectArtistExternalIdsByArtist = "SELECT ArtistId, Provider, Value FROM ArtistExternalIds WHERE ArtistId = @ArtistId";
 
 	private const string SelectAlbum = """
-		SELECT al.Id, al.Title, al.Year, al.IsCompilation,
+		SELECT al.Id, al.Title, al.Year, al.IsCompilation, al.Tracked,
 		       aa.Position, ar.Id AS ArtistId, ar.Name
 		FROM Albums al
 		LEFT JOIN AlbumArtists aa ON aa.AlbumId = al.Id
@@ -94,8 +94,8 @@ public class SqliteCatalogue(IOptions<SqliteOptions> options) : ICatalogue
 	private const string InsertArtistExternalId = "INSERT INTO ArtistExternalIds (ArtistId, Provider, Value) VALUES (@ArtistId, @Provider, @Value)";
 
 	private const string UpsertAlbum = """
-		INSERT INTO Albums (Id, Title, Year, IsCompilation) VALUES (@Id, @Title, @Year, @IsCompilation)
-		ON CONFLICT (Id) DO UPDATE SET Title = excluded.Title, Year = excluded.Year, IsCompilation = excluded.IsCompilation
+		INSERT INTO Albums (Id, Title, Year, IsCompilation, Tracked) VALUES (@Id, @Title, @Year, @IsCompilation, @Tracked)
+		ON CONFLICT (Id) DO UPDATE SET Title = excluded.Title, Year = excluded.Year, IsCompilation = excluded.IsCompilation, Tracked = excluded.Tracked
 		""";
 
 	private const string DeleteAlbumExternalIds = "DELETE FROM AlbumExternalIds WHERE AlbumId = @Id";

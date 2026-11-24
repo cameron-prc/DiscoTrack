@@ -80,6 +80,7 @@ public class SyncAlbumWithDiscographyService(IDiscographySource source, IDiscogr
 			Title = discographyAlbum.Title,
 			Year = discographyAlbum.Year ?? album.Year,
 			IsCompilation = discographyAlbum.IsCompilation,
+			Tracked = album.Tracked,
 			ExternalIds = album.ExternalIds
 						.Where(externalId => externalId.Provider != source.ReleaseGroupProvider)
 						.Append(discographyAlbum.ReleaseGroupId)

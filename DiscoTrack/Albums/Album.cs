@@ -10,6 +10,7 @@ public class Album
 	public required string Title { get; set; }
 	public required int Year { get; set; }
 	public bool IsCompilation { get; set; }
+	public bool Tracked { get; set; }
 	public IReadOnlyList<AlbumArtist> Artists { get; set; } = [];
 
 	public Artist? PrimaryArtist()

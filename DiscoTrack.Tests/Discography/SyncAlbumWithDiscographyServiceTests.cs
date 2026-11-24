@@ -71,6 +71,19 @@ public class SyncAlbumWithDiscographyServiceTests
 		_catalogue.Verify(catalogue => catalogue.SaveAlbum(synced, It.IsAny<CancellationToken>()), Times.Once);
 	}
 
+	[Theory]
+	[InlineData(true)]
+	[InlineData(false)]
+	public async Task Keeps_the_album_tracked_flag(bool tracked)
+	{
+		_album.Tracked = tracked;
+		_resolver.Setup(resolver => resolver.Resolve(_album, It.IsAny<CancellationToken>())).ReturnsAsync(Discography(DiscographyTool));
+
+		var result = await Sync().Run(_album.Id, CancellationToken.None);
+
+		Assert.Equal(tracked, result.GetRight.Album.Tracked);
+	}
+
 	[Fact]
 	public async Task Keeps_the_album_year_when_the_discography_has_none()
 	{

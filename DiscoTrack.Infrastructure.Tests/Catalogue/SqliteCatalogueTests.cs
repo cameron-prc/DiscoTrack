@@ -316,6 +316,23 @@ public sealed class SqliteCatalogueTests : IDisposable
 	}
 
 	[Fact]
+	public async Task SaveAlbum_round_trips_the_tracked_flag()
+	{
+		var wanted = new Album { Title = "Wanted", Year = 1999, Tracked = true };
+		var ignored = new Album { Title = "Ignored", Year = 2003 };
+		await SaveAlbums(wanted, ignored);
+
+		Assert.True((await _catalogue.GetAlbum(wanted.Id, CancellationToken.None))!.Tracked);
+		Assert.False((await _catalogue.GetAlbum(ignored.Id, CancellationToken.None))!.Tracked);
+		Assert.Equal([false, true], (await _catalogue.GetAlbums(CancellationToken.None)).Select(album => album.Tracked));
+
+		wanted.Tracked = false;
+		await SaveAlbums(wanted);
+
+		Assert.False((await _catalogue.GetAlbum(wanted.Id, CancellationToken.None))!.Tracked);
+	}
+
+	[Fact]
 	public async Task SaveAlbum_round_trips_compilations()
 	{
 		var various = Artist("art-various", "Various Artists");

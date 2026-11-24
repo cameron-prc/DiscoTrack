@@ -170,6 +170,7 @@ public class SyncLibrary(ICatalogue catalogue, ILibrarySource librarySource, ILo
 				Year = libraryAlbum.Year!.Value, // Not technically required by subsonic but required by us
 				ExternalIds = libraryAlbums.SelectMany(duplicate => duplicate.ExternalIds).Distinct().ToList(),
 				IsCompilation = libraryAlbum.IsCompilation,
+				Tracked = true,
 				Artists = albumArtists
 			};
 
