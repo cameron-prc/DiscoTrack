@@ -9,6 +9,8 @@ namespace DiscoTrack.Infrastructure.Discography;
 
 public partial class MusicBrainzDiscographySource(IMusicBrainzClient client, IOptions<MusicBrainzOptions> options) : IDiscographySource
 {
+	private static readonly IReadOnlyList<string> StudioAlbumTypes = ["album", "ep"];
+
 	private readonly int _pageSize = options.Value.PageSize;
 	private readonly int _searchSize = options.Value.SearchSize;
 
@@ -59,6 +61,20 @@ public partial class MusicBrainzDiscographySource(IMusicBrainzClient client, IOp
 		return releaseGroup.ToDiscographyAlbum(await GetReleases(releaseGroup.Id, ct));
 	}
 
+	public Task<DiscographyArtist?> GetArtist(ExternalId id, CancellationToken ct)
+	{
+		return id switch
+		{
+			MusicBrainzArtistId artistId => GetArtist(artistId, ct),
+			_ => throw new ArgumentException($"{id.Provider} is not a MusicBrainz artist id", nameof(id)),
+		};
+	}
+
+	private async Task<DiscographyArtist?> GetArtist(MusicBrainzArtistId artistId, CancellationToken ct)
+	{
+		return (await client.GetArtist(artistId.Value, ct))?.ToDiscographyArtist();
+	}
+
 	public Task<IReadOnlyList<DiscographyAlbum>> SearchAlbums(ExternalId artistId, string title, CancellationToken ct)
 	{
 		return artistId switch
@@ -74,6 +90,33 @@ public partial class MusicBrainzDiscographySource(IMusicBrainzClient client, IOp
 
 		return releaseGroups
 			.Select(releaseGroup => releaseGroup.ToDiscographyAlbum(releaseGroup.Releases ?? []))
+			.ToList();
+	}
+
+	public Task<IReadOnlyList<DiscographyAlbum>> GetArtistAlbums(ExternalId artistId, CancellationToken ct)
+	{
+		return artistId switch
+		{
+			MusicBrainzArtistId musicBrainzArtistId => GetArtistAlbums(musicBrainzArtistId, ct),
+			_ => throw new ArgumentException($"{artistId.Provider} is not a MusicBrainz artist id", nameof(artistId)),
+		};
+	}
+
+	private async Task<IReadOnlyList<DiscographyAlbum>> GetArtistAlbums(MusicBrainzArtistId artistId, CancellationToken ct)
+	{
+		var releaseGroups = new List<ReleaseGroup>();
+		IReadOnlyList<ReleaseGroup> releaseGroupPage;
+
+		do
+		{
+			releaseGroupPage = await client.BrowseReleaseGroups(artistId.Value, StudioAlbumTypes, _pageSize, releaseGroups.Count, ct);
+			releaseGroups.AddRange(releaseGroupPage);
+		}
+		while (releaseGroupPage.Count >= _pageSize);
+
+		return releaseGroups
+			.Where(releaseGroup => releaseGroup.SecondaryTypes is null or { Count: 0 })
+			.Select(releaseGroup => releaseGroup.ToDiscographyAlbum([]))
 			.ToList();
 	}
 

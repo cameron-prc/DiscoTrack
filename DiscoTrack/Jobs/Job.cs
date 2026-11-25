@@ -1,4 +1,5 @@
 using DiscoTrack.Albums;
+using DiscoTrack.Artists;
 
 namespace DiscoTrack.Jobs;
 
@@ -8,6 +9,7 @@ public class Job
 	public JobStatus Status { get; private set; }
 	public JobType Type { get; }
 	public AlbumId? AlbumId { get; }
+	public ArtistId? ArtistId { get; }
 
 	public DateTime CreatedAt { get; }
 	public DateTime UpdatedAt { get; private set; }
@@ -25,6 +27,11 @@ public class Job
 
 		CreatedAt = now;
 		UpdatedAt = now;
+	}
+
+	public Job(JobType jobType, ArtistId artistId) : this(jobType)
+	{
+		ArtistId = artistId;
 	}
 
 	public void MarkAsStarted()

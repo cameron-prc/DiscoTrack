@@ -194,6 +194,75 @@ public class MusicBrainzDiscographySourceTests
 	}
 
 	[Fact]
+	public async Task GetArtist_returns_the_artist_with_an_empty_disambiguation_as_null()
+	{
+		_client.Setup(client => client.GetArtist("mb-puscifer", It.IsAny<CancellationToken>())).ReturnsAsync(Puscifer);
+
+		var artist = await Source().GetArtist(new MusicBrainzArtistId("mb-puscifer"), CancellationToken.None);
+
+		Assert.Equal(new DiscographyArtist(new MusicBrainzArtistId("mb-puscifer"), "Puscifer", null), artist);
+	}
+
+	[Fact]
+	public async Task GetArtist_returns_null_when_the_artist_is_not_found()
+	{
+		_client.Setup(client => client.GetArtist("mb-tool", It.IsAny<CancellationToken>())).ReturnsAsync((Artist?)null);
+
+		Assert.Null(await Source().GetArtist(new MusicBrainzArtistId("mb-tool"), CancellationToken.None));
+	}
+
+	[Fact]
+	public async Task GetArtist_rejects_an_id_that_is_not_a_MusicBrainz_artist_id()
+	{
+		await Assert.ThrowsAsync<ArgumentException>(() => Source().GetArtist(new MusicBrainzReleaseId("rel-lateralus-cd"), CancellationToken.None));
+	}
+
+	[Fact]
+	public async Task GetArtistAlbums_browses_the_artists_albums_and_eps_until_a_short_page()
+	{
+		var opiate = Lateralus with { Id = "rg-opiate", Title = "Opiate", FirstReleaseDate = "1992-03-10" };
+		var undertow = Lateralus with { Id = "rg-undertow", Title = "Undertow", FirstReleaseDate = "1993-04-06" };
+		_client.Setup(client => client.BrowseReleaseGroups("mb-tool", new[] { "album", "ep" }, 2, 0, It.IsAny<CancellationToken>())).ReturnsAsync([Lateralus, opiate]);
+		_client.Setup(client => client.BrowseReleaseGroups("mb-tool", new[] { "album", "ep" }, 2, 2, It.IsAny<CancellationToken>())).ReturnsAsync([undertow]);
+
+		var albums = await Source(pageSize: 2).GetArtistAlbums(new MusicBrainzArtistId("mb-tool"), CancellationToken.None);
+
+		Assert.Equal(["Lateralus", "Opiate", "Undertow"], albums.Select(album => album.Title));
+		_client.Verify(client => client.BrowseReleaseGroups(It.IsAny<string>(), It.IsAny<IReadOnlyList<string>>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Exactly(2));
+	}
+
+	[Fact]
+	public async Task GetArtistAlbums_leaves_out_release_groups_with_a_secondary_type()
+	{
+		var salival = Lateralus with { Id = "rg-salival", Title = "Salival", SecondaryTypes = ["Compilation", "Live"] };
+		var opiate = Lateralus with { Id = "rg-opiate", Title = "Opiate", SecondaryTypes = [] };
+		_client.Setup(client => client.BrowseReleaseGroups("mb-tool", It.IsAny<IReadOnlyList<string>>(), It.IsAny<int>(), 0, It.IsAny<CancellationToken>())).ReturnsAsync([Lateralus, salival, opiate]);
+
+		var albums = await Source().GetArtistAlbums(new MusicBrainzArtistId("mb-tool"), CancellationToken.None);
+
+		Assert.Equal(["Lateralus", "Opiate"], albums.Select(album => album.Title));
+	}
+
+	[Fact]
+	public async Task GetArtistAlbums_maps_each_release_group_without_releases()
+	{
+		_client.Setup(client => client.BrowseReleaseGroups("mb-tool", It.IsAny<IReadOnlyList<string>>(), It.IsAny<int>(), 0, It.IsAny<CancellationToken>())).ReturnsAsync([Lateralus]);
+
+		var album = Assert.Single(await Source().GetArtistAlbums(new MusicBrainzArtistId("mb-tool"), CancellationToken.None));
+
+		Assert.Equal(new MusicBrainzReleaseGroupId("rg-lateralus"), album.ReleaseGroupId);
+		Assert.Empty(album.ReleaseIds);
+		Assert.Equal(2001, album.Year);
+		Assert.Equal([new DiscographyArtist(new MusicBrainzArtistId("mb-tool"), "Tool", "American rock band")], album.Artists);
+	}
+
+	[Fact]
+	public async Task GetArtistAlbums_rejects_an_artist_id_that_is_not_a_MusicBrainz_artist_id()
+	{
+		await Assert.ThrowsAsync<ArgumentException>(() => Source().GetArtistAlbums(new SubsonicId("art-tool"), CancellationToken.None));
+	}
+
+	[Fact]
 	public async Task SearchArtists_searches_by_the_escaped_name()
 	{
 		SetupArtistSearch();

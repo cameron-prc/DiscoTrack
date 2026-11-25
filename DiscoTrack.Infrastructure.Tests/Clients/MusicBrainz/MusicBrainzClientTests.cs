@@ -93,6 +93,39 @@ public class MusicBrainzClientTests
 	}
 
 	[Fact]
+	public async Task GetArtist_requests_the_artist()
+	{
+		_http.WhenPathContains("artist/", Fixtures.Read("musicbrainz/artist.json"));
+
+		await Client().GetArtist(ToolId, CancellationToken.None);
+
+		var request = _http.Requests.Single().RequestUri!;
+		Assert.Equal($"/ws/2/artist/{ToolId}", request.AbsolutePath);
+		Assert.Equal("?fmt=json", request.Query);
+	}
+
+	[Fact]
+	public async Task GetArtist_returns_the_artist_as_deserialised()
+	{
+		_http.WhenPathContains("artist/", Fixtures.Read("musicbrainz/artist.json"));
+
+		var artist = await Client().GetArtist(ToolId, CancellationToken.None);
+
+		Assert.NotNull(artist);
+		Assert.Equal(ToolId, artist.Id);
+		Assert.Equal("Tool", artist.Name);
+		Assert.Equal("American rock band", artist.Disambiguation);
+	}
+
+	[Fact]
+	public async Task GetArtist_returns_null_when_the_artist_is_not_found()
+	{
+		_http.WhenPathContains("artist/", Fixtures.Read("musicbrainz/error-not-found.json"), HttpStatusCode.NotFound);
+
+		Assert.Null(await Client().GetArtist(ToolId, CancellationToken.None));
+	}
+
+	[Fact]
 	public async Task BrowseReleases_requests_the_given_release_group_limit_and_offset()
 	{
 		_http.WhenPathContains("release?", Fixtures.Read("musicbrainz/release-browse.json"));
@@ -118,6 +151,41 @@ public class MusicBrainzClientTests
 		Assert.Equal(3, releases.Count);
 		Assert.Equal("451df9bc-1ba2-453c-9c60-9537a5f3c6e3", releases[0].Id);
 		Assert.All(releases, release => Assert.Equal("Lateralus", release.Title));
+	}
+
+	[Fact]
+	public async Task BrowseReleaseGroups_requests_the_artists_release_groups_of_the_given_types_with_credits()
+	{
+		_http.WhenPathContains("release-group?", Fixtures.Read("musicbrainz/release-group-browse.json"));
+
+		await Client().BrowseReleaseGroups(ToolId, ["album", "ep"], limit: 3, offset: 6, CancellationToken.None);
+
+		var request = _http.Requests.Single().RequestUri!;
+		var query = HttpUtility.ParseQueryString(request.Query);
+		Assert.Equal("/ws/2/release-group", request.AbsolutePath);
+		Assert.Equal(ToolId, query["artist"]);
+		Assert.Equal("album|ep", query["type"]);
+		Assert.Equal("website-default", query["release-group-status"]);
+		Assert.Equal("artist-credits", query["inc"]);
+		Assert.Equal("3", query["limit"]);
+		Assert.Equal("6", query["offset"]);
+		Assert.Equal("json", query["fmt"]);
+	}
+
+	[Fact]
+	public async Task BrowseReleaseGroups_returns_the_page_as_deserialised()
+	{
+		_http.WhenPathContains("release-group?", Fixtures.Read("musicbrainz/release-group-browse.json"));
+
+		var releaseGroups = await Client().BrowseReleaseGroups(ToolId, ["album", "ep"], 3, 0, CancellationToken.None);
+
+		Assert.Equal(["Lateralus", "Opiate", "Salival"], releaseGroups.Select(releaseGroup => releaseGroup.Title));
+		Assert.Equal(LateralusReleaseGroupId, releaseGroups[0].Id);
+		Assert.Equal("2001-05-14", releaseGroups[0].FirstReleaseDate);
+		Assert.Equal(["Album", "EP", "Album"], releaseGroups.Select(releaseGroup => releaseGroup.PrimaryType));
+		Assert.Empty(releaseGroups[0].SecondaryTypes!);
+		Assert.Equal(["Compilation", "Live"], releaseGroups[2].SecondaryTypes);
+		Assert.Equal(ToolId, Assert.Single(releaseGroups[0].ArtistCredit!).Artist.Id);
 	}
 
 	[Fact]

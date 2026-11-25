@@ -25,6 +25,11 @@ public class MusicBrainzClient(HttpClient http) : IMusicBrainzClient
 		return Get<ReleaseGroup>($"{MusicBrainzRoutes.ReleaseGroup}/{Uri.EscapeDataString(id)}?inc=artist-credits&fmt={JsonFormat}", ct);
 	}
 
+	public Task<Artist?> GetArtist(string id, CancellationToken ct)
+	{
+		return Get<Artist>($"{MusicBrainzRoutes.Artist}/{Uri.EscapeDataString(id)}?fmt={JsonFormat}", ct);
+	}
+
 	public async Task<IReadOnlyList<Release>> BrowseReleases(string releaseGroupId, int limit, int offset, CancellationToken ct)
 	{
 		var query = new Dictionary<string, string> { ["release-group"] = releaseGroupId };
@@ -32,6 +37,21 @@ public class MusicBrainzClient(HttpClient http) : IMusicBrainzClient
 		var response = await Get<ReleaseBrowseResponse>(BuildListUrl(MusicBrainzRoutes.Release, query, limit, offset), ct);
 
 		return response?.Releases ?? [];
+	}
+
+	public async Task<IReadOnlyList<ReleaseGroup>> BrowseReleaseGroups(string artistId, IReadOnlyList<string> types, int limit, int offset, CancellationToken ct)
+	{
+		var query = new Dictionary<string, string>
+		{
+			["artist"] = artistId,
+			["type"] = string.Join("|", types),
+			["release-group-status"] = "website-default",
+			["inc"] = "artist-credits",
+		};
+
+		var response = await Get<ReleaseGroupBrowseResponse>(BuildListUrl(MusicBrainzRoutes.ReleaseGroup, query, limit, offset), ct);
+
+		return response?.ReleaseGroups ?? [];
 	}
 
 	public async Task<IReadOnlyList<ReleaseGroup>> SearchReleaseGroups(string query, int limit, int offset, CancellationToken ct)

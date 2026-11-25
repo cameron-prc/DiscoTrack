@@ -162,6 +162,7 @@ public class JobBackgroundServiceTests : IDisposable
 			.AddInMemoryJobQueue()
 			.AddScoped(_ => MockHandler())
 			.AddScoped(_ => Mock.Of<ISyncAlbumWithDiscographyJobHandler>())
+			.AddScoped(_ => Mock.Of<ISyncArtistWithDiscographyJobHandler>())
 			.AddScoped<IJobRunner, JobRunner>()
 			.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>))
 			.AddJobBackgroundService();

@@ -1,0 +1,66 @@
+{
+  "release-group-count": 10,
+  "release-group-offset": 0,
+  "release-groups": [
+    {
+      "id": "02f79295-21e1-34cc-82f2-63219eec4f0a",
+      "title": "Lateralus",
+      "first-release-date": "2001-05-14",
+      "primary-type": "Album",
+      "secondary-types": [],
+      "artist-credit": [
+        {
+          "name": "Tool",
+          "joinphrase": "",
+          "artist": {
+            "id": "66fc5bf8-daa4-4241-b378-9bc9077939d2",
+            "name": "Tool",
+            "sort-name": "Tool",
+            "disambiguation": "American rock band"
+          }
+        }
+      ]
+    },
+    {
+      "id": "bec2ca63-468d-46bc-895c-75861d931fb9",
+      "title": "Opiate",
+      "first-release-date": "1992-03-10",
+      "primary-type": "EP",
+      "secondary-types": [],
+      "artist-credit": [
+        {
+          "name": "Tool",
+          "joinphrase": "",
+          "artist": {
+            "id": "66fc5bf8-daa4-4241-b378-9bc9077939d2",
+            "name": "Tool",
+            "sort-name": "Tool",
+            "disambiguation": "American rock band"
+          }
+        }
+      ]
+    },
+    {
+      "id": "d8b5307b-0b1c-327e-a105-35a811edb0fb",
+      "title": "Salival",
+      "first-release-date": "2000-12-12",
+      "primary-type": "Album",
+      "secondary-types": [
+        "Compilation",
+        "Live"
+      ],
+      "artist-credit": [
+        {
+          "name": "Tool",
+          "joinphrase": "",
+          "artist": {
+            "id": "66fc5bf8-daa4-4241-b378-9bc9077939d2",
+            "name": "Tool",
+            "sort-name": "Tool",
+            "disambiguation": "American rock band"
+          }
+        }
+      ]
+    }
+  ]
+}

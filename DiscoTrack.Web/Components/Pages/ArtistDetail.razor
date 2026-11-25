@@ -1,6 +1,8 @@
 @page "/artists/{Id:guid}"
 @using DiscoTrack.ExternalIds
 @inject ICatalogue Catalogue
+@inject IJobQueue JobQueue
+@rendermode InteractiveServer
 
 @if (_loading)
 {
@@ -23,6 +25,11 @@ else
 			<li>@externalId.Provider: @externalId.Value</li>
 		}
 	</ul>
+	<button @onclick="SyncDiscography">Sync with discography</button>
+	@if (_syncQueued)
+	{
+		<p>Discography sync queued</p>
+	}
 	<p>Album Count: @_albums.Count</p>
 	<table>
 		<thead>
@@ -49,6 +56,7 @@ else
 
 	private bool _loading = true;
 	private Artist? _artist;
+	private bool _syncQueued;
 	private IReadOnlyList<Album> _albums = [];
 	private IReadOnlyList<ExternalId> _externalIds = [];
 
@@ -62,5 +70,11 @@ else
 			_albums = await Catalogue.GetArtistAlbums(artistId, CancellationToken.None);
 		}
 		_loading = false;
+	}
+
+	private async Task SyncDiscography()
+	{
+		await JobQueue.Enqueue(new Job(JobType.SyncArtistWithDiscography, new ArtistId(Id)), CancellationToken.None);
+		_syncQueued = true;
 	}
 }
