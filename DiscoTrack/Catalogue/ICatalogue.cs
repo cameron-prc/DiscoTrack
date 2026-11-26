@@ -17,5 +17,5 @@ public interface ICatalogue
 	Task SaveAlbum(Album album, CancellationToken ct);
 	Task SaveAlbumTracks(AlbumId albumId, IReadOnlyList<Track> tracks, CancellationToken ct);
 	Task MergeArtists(Artist survivor, ArtistId absorbed, CancellationToken ct);
-	Task MergeAlbums(Album survivor, AlbumId absorbed, CancellationToken ct);
+	Task MergeAlbums(Album survivor, AlbumId absorbed, IReadOnlyList<Track> tracks, CancellationToken ct);
 }

@@ -531,13 +531,86 @@ public sealed class SqliteCatalogueTests : IDisposable
 
 		owned.Title = "Lateralus";
 		owned.ExternalIds = [new SubsonicId("alb-l"), new MusicBrainzReleaseGroupId("rg-l")];
-		await _catalogue.MergeAlbums(owned, untracked.Id, CancellationToken.None);
+		await _catalogue.MergeAlbums(owned, untracked.Id, [], CancellationToken.None);
 
 		var album = Assert.Single(await _catalogue.GetAlbums(CancellationToken.None));
 		Assert.Equal(owned.Id, album.Id);
 		Assert.Equal("Lateralus", album.Title);
 		Assert.Equal([new SubsonicId("alb-l"), new MusicBrainzReleaseGroupId("rg-l")], album.ExternalIds.OrderByDescending(id => id.Provider == Provider.Subsonic));
 		Assert.Equal(tool.Id, Assert.Single(album.Artists).Artist.Id);
+	}
+
+	[Fact]
+	public async Task MergeAlbums_replaces_the_tracks_of_both_albums_with_the_given_tracks()
+	{
+		var tool = Artist("art-tool", "Tool");
+		var owned = Album("alb-l", "Lateralus (Remaster)", 2019, Credit(tool, 1));
+		var vinyl = Album("alb-l-vinyl", "Lateralus", 2001, Credit(tool, 1));
+		var salival = Album("alb-s", "Salival", 2000, Credit(tool, 1));
+		await SaveArtists(tool);
+		await SaveAlbums(owned, vinyl, salival);
+		var grudge = Track(owned, 1, 1, "The Grudge", TrackCredit(tool, 1));
+		var vinylGrudge = Track(vinyl, 1, 1, "The Grudge");
+		var vinylBonus = Track(vinyl, 2, 1, "Bonus", TrackCredit(tool, 1));
+		vinylBonus.ExternalIds = [new SubsonicId("song-bonus")];
+		await _catalogue.SaveAlbumTracks(owned.Id, [grudge, Track(owned, 1, 2, "Dropped")], CancellationToken.None);
+		await _catalogue.SaveAlbumTracks(vinyl.Id, [vinylGrudge, vinylBonus], CancellationToken.None);
+		await _catalogue.SaveAlbumTracks(salival.Id, [Track(salival, 1, 1, "Third Eye")], CancellationToken.None);
+
+		var movedBonus = new Track
+		{
+			Id = vinylBonus.Id, AlbumId = owned.Id, Title = "Bonus", DiscNumber = 2, Position = 1,
+			ExternalIds = vinylBonus.ExternalIds, Artists = vinylBonus.Artists,
+		};
+		owned.ExternalIds = [new SubsonicId("alb-l"), new SubsonicId("alb-l-vinyl")];
+		await _catalogue.MergeAlbums(owned, vinyl.Id, [grudge, movedBonus], CancellationToken.None);
+
+		var tracks = await _catalogue.GetAlbumTracks(owned.Id, CancellationToken.None);
+		Assert.Equal([grudge.Id, vinylBonus.Id], tracks.Select(track => track.Id));
+		Assert.Equal([new SubsonicId("song-bonus")], tracks[1].ExternalIds);
+		Assert.Equal(tool.Id, Assert.Single(tracks[1].Artists).Artist.Id);
+		Assert.Empty(await _catalogue.GetAlbumTracks(vinyl.Id, CancellationToken.None));
+		Assert.Equal("Third Eye", Assert.Single(await _catalogue.GetAlbumTracks(salival.Id, CancellationToken.None)).Title);
+	}
+
+	[Fact]
+	public async Task MergeAlbums_rejects_a_track_of_another_album_and_changes_nothing()
+	{
+		var owned = Album("alb-l", "Lateralus (Remaster)", 2019);
+		var vinyl = Album("alb-l-vinyl", "Lateralus", 2001);
+		await SaveAlbums(owned, vinyl);
+		await _catalogue.SaveAlbumTracks(vinyl.Id, [Track(vinyl, 1, 1, "The Grudge")], CancellationToken.None);
+
+		await Assert.ThrowsAsync<ArgumentException>(
+			() => _catalogue.MergeAlbums(owned, vinyl.Id, [Track(vinyl, 1, 1, "The Grudge")], CancellationToken.None));
+
+		Assert.Equal(2, (await _catalogue.GetAlbums(CancellationToken.None)).Count);
+		Assert.Single(await _catalogue.GetAlbumTracks(vinyl.Id, CancellationToken.None));
+	}
+
+	[Fact]
+	public async Task MergeArtists_moves_the_absorbed_artists_track_credits_to_the_survivor()
+	{
+		var library = Artist("art-tool", "TOOL");
+		var credited = new Artist { ExternalIds = [new MusicBrainzArtistId("mb-tool")], Name = "Tool" };
+		var puscifer = Artist("art-puscifer", "Puscifer");
+		var lateralus = Album("alb-l", "Lateralus", 2001, Credit(library, 1));
+		await SaveArtists(library, credited, puscifer);
+		await SaveAlbums(lateralus);
+		await _catalogue.SaveAlbumTracks(
+			lateralus.Id,
+			[
+				Track(lateralus, 1, 1, "Credited only", TrackCredit(puscifer, 1), TrackCredit(credited, 2)),
+				Track(lateralus, 1, 2, "Both", TrackCredit(library, 1), TrackCredit(credited, 2)),
+			],
+			CancellationToken.None);
+
+		library.ExternalIds = [new SubsonicId("art-tool"), new MusicBrainzArtistId("mb-tool")];
+		await _catalogue.MergeArtists(library, credited.Id, CancellationToken.None);
+
+		var tracks = await _catalogue.GetAlbumTracks(lateralus.Id, CancellationToken.None);
+		Assert.Equal([puscifer.Id, library.Id], tracks[0].Artists.Select(credit => credit.Artist.Id));
+		Assert.Equal([library.Id], tracks[1].Artists.Select(credit => credit.Artist.Id));
 	}
 
 	[Fact]

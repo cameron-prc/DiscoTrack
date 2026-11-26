@@ -1,3 +1,4 @@
+using System.Data.Common;
 using Dapper;
 using DiscoTrack.Albums;
 using DiscoTrack.Artists;
@@ -114,6 +115,14 @@ public class SqliteCatalogue(IOptions<SqliteOptions> options) : ICatalogue
 		""";
 
 	private const string DeleteArtistAlbumArtists = "DELETE FROM AlbumArtists WHERE ArtistId = @Absorbed";
+
+	private const string MoveTrackArtists = """
+		UPDATE TrackArtists SET ArtistId = @Survivor
+		WHERE ArtistId = @Absorbed
+		  AND TrackId NOT IN (SELECT TrackId FROM TrackArtists WHERE ArtistId = @Survivor)
+		""";
+
+	private const string DeleteArtistTrackArtists = "DELETE FROM TrackArtists WHERE ArtistId = @Absorbed";
 
 	private const string DeleteArtist = "DELETE FROM Artists WHERE Id = @Absorbed";
 
@@ -382,28 +391,44 @@ public class SqliteCatalogue(IOptions<SqliteOptions> options) : ICatalogue
 
 	public async Task SaveAlbumTracks(AlbumId albumId, IReadOnlyList<Track> tracks, CancellationToken ct)
 	{
-		if (tracks.Any(track => track.AlbumId != albumId))
-		{
-			throw new ArgumentException($"Every track must belong to album {albumId}", nameof(tracks));
-		}
+		ThrowIfAnyTrackBelongsToAnotherAlbum(albumId, tracks);
 
 		await using var connection = new SqliteConnection(_connectionString);
 		await connection.OpenAsync(ct);
 		await using var transaction = await connection.BeginTransactionAsync(ct);
 
+		await DeleteTracks(connection, transaction, albumId);
+		await InsertTracks(connection, transaction, tracks);
+
+		await transaction.CommitAsync(ct);
+	}
+
+	private static void ThrowIfAnyTrackBelongsToAnotherAlbum(AlbumId albumId, IReadOnlyList<Track> tracks)
+	{
+		if (tracks.Any(track => track.AlbumId != albumId))
+		{
+			throw new ArgumentException($"Every track must belong to album {albumId}", nameof(tracks));
+		}
+	}
+
+	private static async Task DeleteTracks(SqliteConnection connection, DbTransaction transaction, AlbumId albumId)
+	{
 		var parameters = new { AlbumId = albumId };
-		var trackDtos = tracks.Select(track => track.ToDto());
-		var externalIdDtos = tracks.SelectMany(track => track.ExternalIds.Select(externalId => externalId.ToDto(track.Id)));
-		var trackArtistDtos = tracks.SelectMany(track => track.Artists.Select(trackArtist => trackArtist.ToDto(track.Id)));
 
 		await connection.ExecuteAsync(DeleteAlbumTrackExternalIds, parameters, transaction);
 		await connection.ExecuteAsync(DeleteAlbumTrackArtists, parameters, transaction);
 		await connection.ExecuteAsync(DeleteAlbumTracks, parameters, transaction);
+	}
+
+	private static async Task InsertTracks(SqliteConnection connection, DbTransaction transaction, IReadOnlyList<Track> tracks)
+	{
+		var trackDtos = tracks.Select(track => track.ToDto());
+		var externalIdDtos = tracks.SelectMany(track => track.ExternalIds.Select(externalId => externalId.ToDto(track.Id)));
+		var trackArtistDtos = tracks.SelectMany(track => track.Artists.Select(trackArtist => trackArtist.ToDto(track.Id)));
+
 		await connection.ExecuteAsync(InsertTrack, trackDtos, transaction);
 		await connection.ExecuteAsync(InsertTrackExternalId, externalIdDtos, transaction);
 		await connection.ExecuteAsync(InsertTrackArtist, trackArtistDtos, transaction);
-
-		await transaction.CommitAsync(ct);
 	}
 
 	public async Task MergeArtists(Artist survivor, ArtistId absorbed, CancellationToken ct)
@@ -420,6 +445,8 @@ public class SqliteCatalogue(IOptions<SqliteOptions> options) : ICatalogue
 		await connection.ExecuteAsync(UpsertArtist, artistDto, transaction);
 		await connection.ExecuteAsync(MoveAlbumArtists, parameters, transaction);
 		await connection.ExecuteAsync(DeleteArtistAlbumArtists, parameters, transaction);
+		await connection.ExecuteAsync(MoveTrackArtists, parameters, transaction);
+		await connection.ExecuteAsync(DeleteArtistTrackArtists, parameters, transaction);
 		await connection.ExecuteAsync(DeleteArtistExternalIds, new { Id = absorbed }, transaction);
 		await connection.ExecuteAsync(DeleteArtistScans, new { Id = absorbed }, transaction);
 		await connection.ExecuteAsync(DeleteArtist, parameters, transaction);
@@ -431,8 +458,10 @@ public class SqliteCatalogue(IOptions<SqliteOptions> options) : ICatalogue
 		await transaction.CommitAsync(ct);
 	}
 
-	public async Task MergeAlbums(Album survivor, AlbumId absorbed, CancellationToken ct)
+	public async Task MergeAlbums(Album survivor, AlbumId absorbed, IReadOnlyList<Track> tracks, CancellationToken ct)
 	{
+		ThrowIfAnyTrackBelongsToAnotherAlbum(survivor.Id, tracks);
+
 		await using var connection = new SqliteConnection(_connectionString);
 		await connection.OpenAsync(ct);
 		await using var transaction = await connection.BeginTransactionAsync(ct);
@@ -442,6 +471,7 @@ public class SqliteCatalogue(IOptions<SqliteOptions> options) : ICatalogue
 		var albumArtistDtos = survivor.Artists.Select(albumArtist => albumArtist.ToDto(survivor.Id));
 		var parameters = new { Absorbed = absorbed };
 
+		await DeleteTracks(connection, transaction, absorbed);
 		await connection.ExecuteAsync(DeleteAlbumExternalIds, new { Id = absorbed }, transaction);
 		await connection.ExecuteAsync(DeleteAlbumArtists, new { Id = absorbed }, transaction);
 		await connection.ExecuteAsync(DeleteAlbum, parameters, transaction);
@@ -450,6 +480,8 @@ public class SqliteCatalogue(IOptions<SqliteOptions> options) : ICatalogue
 		await connection.ExecuteAsync(DeleteAlbumArtists, albumDto, transaction);
 		await connection.ExecuteAsync(InsertAlbumExternalId, externalIdDtos, transaction);
 		await connection.ExecuteAsync(InsertAlbumArtist, albumArtistDtos, transaction);
+		await DeleteTracks(connection, transaction, survivor.Id);
+		await InsertTracks(connection, transaction, tracks);
 
 		await transaction.CommitAsync(ct);
 	}

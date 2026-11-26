@@ -89,10 +89,12 @@ internal sealed class FakeCatalogue : ICatalogue
 		return Task.CompletedTask;
 	}
 
-	public Task MergeAlbums(Album survivor, AlbumId absorbed, CancellationToken ct)
+	public Task MergeAlbums(Album survivor, AlbumId absorbed, IReadOnlyList<Track> tracks, CancellationToken ct)
 	{
 		Record(nameof(MergeAlbums));
 		Albums.RemoveAll(a => a.Id == absorbed);
+		Tracks.Remove(absorbed);
+		Tracks[survivor.Id] = tracks;
 		return Task.CompletedTask;
 	}
 

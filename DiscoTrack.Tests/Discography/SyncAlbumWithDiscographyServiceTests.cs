@@ -4,6 +4,7 @@ using DiscoTrack.Catalogue;
 using DiscoTrack.Discography;
 using DiscoTrack.Discography.SyncAlbumWithDiscography;
 using DiscoTrack.ExternalIds;
+using DiscoTrack.Tracks;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
@@ -43,7 +44,8 @@ public class SyncAlbumWithDiscographyServiceTests
 		_catalogue.Setup(catalogue => catalogue.GetAlbum(_album.Id, It.IsAny<CancellationToken>())).ReturnsAsync(_album);
 		_catalogue.Setup(catalogue => catalogue.GetArtists(It.IsAny<CancellationToken>())).ReturnsAsync([_tool]);
 		_catalogue.Setup(catalogue => catalogue.GetAlbums(It.IsAny<CancellationToken>())).ReturnsAsync(_knownAlbums);
-		_catalogue.Setup(catalogue => catalogue.MergeAlbums(It.IsAny<Album>(), It.IsAny<AlbumId>(), It.IsAny<CancellationToken>()))
+		_catalogue.Setup(catalogue => catalogue.GetAlbumTracks(It.IsAny<AlbumId>(), It.IsAny<CancellationToken>())).ReturnsAsync([]);
+		_catalogue.Setup(catalogue => catalogue.MergeAlbums(It.IsAny<Album>(), It.IsAny<AlbumId>(), It.IsAny<IReadOnlyList<Track>>(), It.IsAny<CancellationToken>()))
 			.Callback(() => _saves.Add(nameof(ICatalogue.MergeAlbums)));
 		_catalogue.Setup(catalogue => catalogue.SaveArtist(It.IsAny<Artist>(), It.IsAny<CancellationToken>()))
 			.Callback(() => _saves.Add(nameof(ICatalogue.SaveArtist)));
@@ -137,8 +139,38 @@ public class SyncAlbumWithDiscographyServiceTests
 		Assert.Equal(
 			[new SubsonicId("alb-lateralus"), ReleaseId, new SubsonicId("alb-lateralus-vinyl"), new MusicBrainzReleaseId("rel-lateralus-vinyl"), ReleaseGroupId],
 			response.Album.ExternalIds);
-		_catalogue.Verify(catalogue => catalogue.MergeAlbums(response.Album, otherEdition.Id, It.IsAny<CancellationToken>()), Times.Once);
+		_catalogue.Verify(catalogue => catalogue.MergeAlbums(response.Album, otherEdition.Id, It.IsAny<IReadOnlyList<Track>>(), It.IsAny<CancellationToken>()), Times.Once);
 		Assert.Equal([nameof(ICatalogue.MergeAlbums)], _saves);
+	}
+
+	[Fact]
+	public async Task Absorbing_an_album_merges_its_tracks_into_the_albums_own()
+	{
+		var otherEdition = new Album { ExternalIds = [new SubsonicId("alb-lateralus-vinyl"), ReleaseGroupId], Title = "Lateralus", Year = 2001 };
+		_knownAlbums.Add(otherEdition);
+		var grudge = new Track { AlbumId = _album.Id, Title = "The Grudge", DiscNumber = 1, Position = 1, ExternalIds = [new SubsonicId("song-grudge")] };
+		var vinylGrudge = new Track { AlbumId = otherEdition.Id, Title = "The Grudge", DiscNumber = 1, Position = 1, ExternalIds = [new SubsonicId("song-grudge-vinyl")] };
+		var vinylBonus = new Track { AlbumId = otherEdition.Id, Title = "Bonus", DiscNumber = 2, Position = 1, ExternalIds = [new SubsonicId("song-bonus")] };
+		_catalogue.Setup(catalogue => catalogue.GetAlbumTracks(_album.Id, It.IsAny<CancellationToken>())).ReturnsAsync([grudge]);
+		_catalogue.Setup(catalogue => catalogue.GetAlbumTracks(otherEdition.Id, It.IsAny<CancellationToken>())).ReturnsAsync([vinylGrudge, vinylBonus]);
+		IReadOnlyList<Track> merged = [];
+		_catalogue.Setup(catalogue => catalogue.MergeAlbums(It.IsAny<Album>(), It.IsAny<AlbumId>(), It.IsAny<IReadOnlyList<Track>>(), It.IsAny<CancellationToken>()))
+			.Callback((Album _, AlbumId _, IReadOnlyList<Track> tracks, CancellationToken _) => merged = tracks);
+
+		await Sync().Run(_album.Id, CancellationToken.None);
+
+		Assert.Equal(["The Grudge", "Bonus"], merged.Select(track => track.Title));
+		Assert.All(merged, track => Assert.Equal(_album.Id, track.AlbumId));
+		Assert.Equal([new SubsonicId("song-grudge"), new SubsonicId("song-grudge-vinyl")], merged[0].ExternalIds);
+		Assert.Equal(vinylBonus.Id, merged[1].Id);
+	}
+
+	[Fact]
+	public async Task Does_not_read_tracks_when_no_album_is_absorbed()
+	{
+		await Sync().Run(_album.Id, CancellationToken.None);
+
+		_catalogue.Verify(catalogue => catalogue.GetAlbumTracks(It.IsAny<AlbumId>(), It.IsAny<CancellationToken>()), Times.Never);
 	}
 
 	[Theory]
@@ -169,7 +201,7 @@ public class SyncAlbumWithDiscographyServiceTests
 	public async Task Returns_an_error_when_absorbing_an_album_fails()
 	{
 		_knownAlbums.Add(new Album { ExternalIds = [ReleaseGroupId], Title = "Lateralus", Year = 2001 });
-		_catalogue.Setup(catalogue => catalogue.MergeAlbums(It.IsAny<Album>(), It.IsAny<AlbumId>(), It.IsAny<CancellationToken>()))
+		_catalogue.Setup(catalogue => catalogue.MergeAlbums(It.IsAny<Album>(), It.IsAny<AlbumId>(), It.IsAny<IReadOnlyList<Track>>(), It.IsAny<CancellationToken>()))
 			.ThrowsAsync(new InvalidOperationException("database is locked"));
 
 		var result = await Sync().Run(_album.Id, CancellationToken.None);

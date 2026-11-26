@@ -2,6 +2,7 @@ using DiscoTrack.Albums;
 using DiscoTrack.Artists;
 using DiscoTrack.Catalogue;
 using DiscoTrack.Common;
+using DiscoTrack.Tracks;
 using Microsoft.Extensions.Logging;
 
 namespace DiscoTrack.Discography.SyncAlbumWithDiscography;
@@ -131,7 +132,10 @@ public class SyncAlbumWithDiscographyService(IDiscographySource source, IDiscogr
 			}
 			else
 			{
-				await catalogue.MergeAlbums(syncedAlbum, absorbedAlbum.Id, cancellationToken);
+				var tracks = await catalogue.GetAlbumTracks(album.Id, cancellationToken);
+				var absorbedTracks = await catalogue.GetAlbumTracks(absorbedAlbum.Id, cancellationToken);
+
+				await catalogue.MergeAlbums(syncedAlbum, absorbedAlbum.Id, absorbedTracks.MergeInto(syncedAlbum.Id, tracks), cancellationToken);
 			}
 		}
 		catch (Exception exception) when (exception is not OperationCanceledException)
