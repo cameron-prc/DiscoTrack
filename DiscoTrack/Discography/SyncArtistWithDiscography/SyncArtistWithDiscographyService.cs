@@ -72,12 +72,13 @@ public class SyncArtistWithDiscographyService(
 		var absorbedArtist = knownArtists
 				.FirstOrDefault(knownArtist => knownArtist.Id != artist.Id && knownArtist.ExternalIds.Contains(discographyArtist.Id));
 
-		if (absorbedArtist is not null || !artist.ExternalIds.Contains(discographyArtist.Id) || artist.Name != discographyArtist.Name || !artist.Tracked)
+		if (absorbedArtist is not null || !artist.ExternalIds.Contains(discographyArtist.Id) || artist.Name != discographyArtist.Name || artist.Disambiguation != discographyArtist.Disambiguation || !artist.Tracked)
 		{
 			artist.Tracked = true;
 			artist.SetExternalId(discographyArtist.Id);
 			artist.SetExternalIds(artist.ExternalIds.Concat(absorbedArtist?.ExternalIds ?? []).Distinct().ToList());
 			artist.Name = discographyArtist.Name;
+			artist.Disambiguation = discographyArtist.Disambiguation;
 
 			try
 			{
@@ -235,6 +236,7 @@ public class SyncArtistWithDiscographyService(
 		return new Artist
 		{
 			Name = discographyArtist.Name,
+			Disambiguation = discographyArtist.Disambiguation,
 			ExternalIds = [discographyArtist.Id],
 		};
 	}

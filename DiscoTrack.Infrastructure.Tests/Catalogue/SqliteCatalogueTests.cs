@@ -150,14 +150,52 @@ public sealed class SqliteCatalogueTests : IDisposable
 	}
 
 	[Fact]
-	public async Task SaveArtist_rejects_a_different_artist_with_the_same_external_id()
+	public async Task SaveArtist_rejects_a_different_artist_with_the_same_discography_id()
 	{
-		await SaveArtists(Artist("art-tool", "Tool"));
+		await SaveArtists(new Artist { ExternalIds = [new MusicBrainzArtistId("mb-tool")], Name = "Tool" });
 
 		await Assert.ThrowsAsync<SqliteException>(
-			() => _catalogue.SaveArtist(Artist("art-tool", "Tool again"), CancellationToken.None));
+			() => _catalogue.SaveArtist(new Artist { ExternalIds = [new MusicBrainzArtistId("mb-tool")], Name = "Tool again" }, CancellationToken.None));
 
 		Assert.Equal(["Tool"], (await _catalogue.GetArtists(CancellationToken.None)).Select(a => a.Name));
+	}
+
+	[Fact]
+	public async Task SaveArtist_lets_two_artists_hold_the_same_library_id()
+	{
+		var house = new Artist { ExternalIds = [new SubsonicId("art-pendulum"), new MusicBrainzArtistId("mb-pendulum-house")], Name = "Pendulum", Disambiguation = "Australian 1990s progressive house artist" };
+		var drumAndBass = new Artist { ExternalIds = [new SubsonicId("art-pendulum"), new MusicBrainzArtistId("mb-pendulum-dnb")], Name = "Pendulum" };
+
+		await SaveArtists(house, drumAndBass);
+
+		var artists = await _catalogue.GetArtists(CancellationToken.None);
+		Assert.Equal(2, artists.Count);
+		Assert.All(artists, artist => Assert.Contains(new SubsonicId("art-pendulum"), artist.ExternalIds));
+		Assert.Equal(["Pendulum", "Pendulum (Australian 1990s progressive house artist)"], artists.Select(artist => artist.DisplayName).Order());
+	}
+
+	[Fact]
+	public async Task Artists_round_trip_their_disambiguation_on_every_read()
+	{
+		var tool = Artist("art-tool", "Tool");
+		tool.Disambiguation = "American rock band";
+		var lateralus = Album("alb-l", "Lateralus", 2001, Credit(tool, 1));
+		await SaveArtists(tool);
+		await SaveAlbums(lateralus);
+		await _catalogue.SaveAlbumTracks(lateralus.Id, [Track(lateralus, 1, 1, "The Grudge", TrackCredit(tool, 1))], CancellationToken.None);
+
+		Assert.Equal("American rock band", Assert.Single(await _catalogue.GetArtists(CancellationToken.None)).Disambiguation);
+		Assert.Equal("American rock band", (await _catalogue.GetArtist(tool.Id, CancellationToken.None))!.Disambiguation);
+		Assert.Equal("American rock band", Assert.Single(await _catalogue.GetAlbumArtists(lateralus.Id, CancellationToken.None)).Disambiguation);
+		Assert.Equal("American rock band", Assert.Single(await _catalogue.GetAlbums(CancellationToken.None)).Artists[0].Artist.Disambiguation);
+		Assert.Equal("American rock band", (await _catalogue.GetAlbum(lateralus.Id, CancellationToken.None))!.Artists[0].Artist.Disambiguation);
+		Assert.Equal("American rock band", Assert.Single(await _catalogue.GetArtistAlbums(tool.Id, CancellationToken.None)).Artists[0].Artist.Disambiguation);
+		Assert.Equal("American rock band", Assert.Single(await _catalogue.GetAlbumTracks(lateralus.Id, CancellationToken.None)).Artists[0].Artist.Disambiguation);
+
+		tool.Disambiguation = null;
+		await SaveArtists(tool);
+
+		Assert.Null(Assert.Single(await _catalogue.GetArtists(CancellationToken.None)).Disambiguation);
 	}
 
 	[Fact]
@@ -465,16 +503,16 @@ public sealed class SqliteCatalogueTests : IDisposable
 	public async Task SaveArtist_changes_nothing_when_an_external_id_belongs_to_another_artist()
 	{
 		var tool = Artist("art-tool", "Tool");
-		await SaveArtists(tool, Artist("art-puscifer", "Puscifer"));
+		await SaveArtists(tool, new Artist { ExternalIds = [new MusicBrainzArtistId("mb-puscifer")], Name = "Puscifer" });
 		tool.Name = "TOOL";
-		tool.ExternalIds = [new SubsonicId("art-tool"), new SubsonicId("art-puscifer")];
+		tool.ExternalIds = [new SubsonicId("art-tool"), new MusicBrainzArtistId("mb-puscifer")];
 
 		await Assert.ThrowsAsync<SqliteException>(
 			() => _catalogue.SaveArtist(tool, CancellationToken.None));
 
 		var artists = await _catalogue.GetArtists(CancellationToken.None);
 		Assert.Equal(["Puscifer", "Tool"], artists.Select(a => a.Name));
-		Assert.Equal([new SubsonicId("art-puscifer"), new SubsonicId("art-tool")], artists.SelectMany(a => a.ExternalIds));
+		Assert.Equal([new MusicBrainzArtistId("mb-puscifer"), new SubsonicId("art-tool")], artists.SelectMany(a => a.ExternalIds));
 	}
 
 	[Fact]
@@ -645,10 +683,10 @@ public sealed class SqliteCatalogueTests : IDisposable
 	{
 		var library = Artist("art-tool", "TOOL");
 		var credited = new Artist { ExternalIds = [new MusicBrainzArtistId("mb-tool")], Name = "Tool" };
-		var puscifer = Artist("art-puscifer", "Puscifer");
+		var puscifer = new Artist { ExternalIds = [new MusicBrainzArtistId("mb-puscifer")], Name = "Puscifer" };
 		await SaveArtists(library, credited, puscifer);
 
-		library.ExternalIds = [new SubsonicId("art-puscifer")];
+		library.ExternalIds = [new MusicBrainzArtistId("mb-puscifer")];
 		await Assert.ThrowsAsync<SqliteException>(() => _catalogue.MergeArtists(library, credited.Id, CancellationToken.None));
 
 		Assert.Equal(["Puscifer", "TOOL", "Tool"], (await _catalogue.GetArtists(CancellationToken.None)).Select(a => a.Name));

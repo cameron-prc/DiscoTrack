@@ -62,7 +62,7 @@ public class SyncAlbumWithDiscographyService(IDiscographySource source, IDiscogr
 				.DistinctBy(artist => MatchKey.For(artist.Name))
 				.ToDictionary(artist => MatchKey.For(artist.Name));
 
-		var updatedArtists = creditedArtists
+		var identifiedArtists = creditedArtists
 				.Where(discographyArtist => !artistsLookup.ContainsKey(discographyArtist.Id))
 				.DistinctBy(discographyArtist => MatchKey.For(discographyArtist.Name))
 				.Where(discographyArtist => unidentifiedAlbumArtists.ContainsKey(MatchKey.For(discographyArtist.Name)))
@@ -76,6 +76,17 @@ public class SyncAlbumWithDiscographyService(IDiscographySource source, IDiscogr
 				.Where(discographyArtist => !artistsLookup.ContainsKey(discographyArtist.Id))
 				.Select(BuildArtist)
 				.Apply(artist => artist.ExternalIds.Apply(externalId => artistsLookup[externalId] = artist));
+
+		var describedArtists = creditedArtists
+				.Select(discographyArtist => (DiscographyArtist: discographyArtist, Artist: artistsLookup[discographyArtist.Id]))
+				.Where(match => match.Artist.Disambiguation != match.DiscographyArtist.Disambiguation)
+				.Apply(match => match.Artist.Disambiguation = match.DiscographyArtist.Disambiguation)
+				.Select(match => match.Artist);
+
+		var updatedArtists = identifiedArtists
+				.Concat(describedArtists)
+				.Distinct()
+				.ToList();
 
 		var absorbedAlbum = knownAlbums
 				.FirstOrDefault(knownAlbum => knownAlbum.Id != album.Id && knownAlbum.ExternalIds.Contains(discographyAlbum.ReleaseGroupId));
@@ -153,6 +164,7 @@ public class SyncAlbumWithDiscographyService(IDiscographySource source, IDiscogr
 		return new Artist
 		{
 			Name = discographyArtist.Name,
+			Disambiguation = discographyArtist.Disambiguation,
 			ExternalIds = [discographyArtist.Id],
 		};
 	}

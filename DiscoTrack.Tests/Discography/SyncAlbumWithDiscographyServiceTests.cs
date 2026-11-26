@@ -21,7 +21,7 @@ public class SyncAlbumWithDiscographyServiceTests
 	private readonly Mock<IDiscographySource> _source = new();
 	private readonly Mock<IDiscographyAlbumResolver> _resolver = new();
 	private readonly List<string> _saves = [];
-	private readonly Artist _tool = new() { ExternalIds = [new SubsonicId("art-tool"), new MusicBrainzArtistId("mb-tool")], Name = "Tool" };
+	private readonly Artist _tool = new() { ExternalIds = [new SubsonicId("art-tool"), new MusicBrainzArtistId("mb-tool")], Name = "Tool", Disambiguation = "American rock band" };
 	private readonly Album _album;
 	private readonly List<Album> _knownAlbums;
 
@@ -218,6 +218,33 @@ public class SyncAlbumWithDiscographyServiceTests
 		Assert.Same(_tool, credit.Artist);
 		Assert.Equal(1, credit.Position);
 		Assert.Equal([nameof(ICatalogue.SaveAlbum)], _saves);
+	}
+
+	[Theory]
+	[InlineData(null)]
+	[InlineData("English tool makers")]
+	public async Task Saves_a_known_artist_whose_disambiguation_differs_from_the_discography(string? disambiguation)
+	{
+		_tool.Disambiguation = disambiguation;
+
+		var response = (await Sync().Run(_album.Id, CancellationToken.None)).GetRight;
+
+		Assert.Equal("American rock band", _tool.Disambiguation);
+		Assert.Equal([_tool], response.UpdatedArtists);
+		Assert.Equal([nameof(ICatalogue.SaveArtist), nameof(ICatalogue.SaveAlbum)], _saves);
+	}
+
+	[Fact]
+	public async Task Gives_a_new_artist_the_discography_disambiguation()
+	{
+		var other = new DiscographyArtist(new MusicBrainzArtistId("mb-other-tool"), "Tool", "90s trance DJ");
+		_resolver.Setup(resolver => resolver.Resolve(_album, It.IsAny<CancellationToken>())).ReturnsAsync(Discography(other));
+
+		var response = (await Sync().Run(_album.Id, CancellationToken.None)).GetRight;
+
+		var created = Assert.Single(response.CreatedArtists);
+		Assert.Equal("90s trance DJ", created.Disambiguation);
+		Assert.Equal("Tool (90s trance DJ)", created.DisplayName);
 	}
 
 	[Fact]

@@ -7,5 +7,6 @@ internal sealed class TrackArtistDto
 	public int CreditPosition { get; init; }
 	public ArtistId ArtistId { get; init; }
 	public required string Name { get; init; }
+	public string? Disambiguation { get; init; }
 	public bool Tracked { get; init; }
 }

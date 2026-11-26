@@ -94,6 +94,7 @@ public class SyncArtistWithDiscographyServiceTests
 	{
 		_tool.ExternalIds = [new SubsonicId("art-tool"), ToolId];
 		_tool.Name = "Tool";
+		_tool.Disambiguation = "American rock band";
 
 		await Run();
 
@@ -106,11 +107,25 @@ public class SyncArtistWithDiscographyServiceTests
 	{
 		_tool.ExternalIds = [new SubsonicId("art-tool"), ToolId];
 		_tool.Name = "Tool";
+		_tool.Disambiguation = "American rock band";
 		_tool.Tracked = false;
 
 		var result = await Run();
 
 		Assert.True(result.GetRight.Artist.Tracked);
+		_catalogue.Verify(catalogue => catalogue.SaveArtist(_tool, It.IsAny<CancellationToken>()), Times.Exactly(2));
+	}
+
+	[Fact]
+	public async Task Saves_the_discography_disambiguation_on_an_artist_that_already_holds_the_artist_id_and_name()
+	{
+		_tool.ExternalIds = [new SubsonicId("art-tool"), ToolId];
+		_tool.Name = "Tool";
+		_tool.Disambiguation = null;
+
+		await Run();
+
+		Assert.Equal("American rock band", _tool.Disambiguation);
 		_catalogue.Verify(catalogue => catalogue.SaveArtist(_tool, It.IsAny<CancellationToken>()), Times.Exactly(2));
 	}
 
@@ -219,6 +234,7 @@ public class SyncArtistWithDiscographyServiceTests
 	{
 		_tool.ExternalIds = [new SubsonicId("art-tool"), ToolId];
 		_tool.Name = "Tool";
+		_tool.Disambiguation = "American rock band";
 		_catalogue.Setup(catalogue => catalogue.SaveArtist(_tool, It.IsAny<CancellationToken>())).ThrowsAsync(new InvalidOperationException("database is locked"));
 
 		Assert.Equal(new UnableToSaveArtistError("database is locked"), Assert.Single((await Run()).GetLeft));

@@ -7,8 +7,12 @@ public class Artist
 	public ArtistId Id { get; init; } = ArtistId.New();
 	public IReadOnlyList<ExternalId> ExternalIds { get; set; } = [];
 	public required string Name { get; set; }
+	public string? Disambiguation { get; set; }
 	public bool Tracked { get; set; }
 	public IReadOnlyDictionary<Provider, DateTimeOffset> LastScannedAt { get; set; } = new Dictionary<Provider, DateTimeOffset>();
+
+	public string DisplayName
+		=> Disambiguation is null ? Name : $"{Name} ({Disambiguation})";
 
 	public void SetExternalId(ExternalId externalId)
 	{

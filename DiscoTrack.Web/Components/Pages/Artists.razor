@@ -23,7 +23,7 @@ else
 			@foreach (var artist in _artists)
 			{
 				<tr>
-					<td><a href="/artists/@artist.Id">@artist.Name</a></td>
+					<td><a href="/artists/@artist.Id">@artist.DisplayName</a></td>
 					<td>@AlbumCount(artist)</td>
 				</tr>
 			}

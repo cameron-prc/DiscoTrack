@@ -16,7 +16,7 @@ else if (_album is null)
 else
 {
 	<PageTitle>@_album.Title</PageTitle>
-	<h1>@_album.Artists.First().Artist.Name</h1>
+	<h1>@_album.Artists.First().Artist.DisplayName</h1>
 	<h2>@_album.Title (@_album.Year)</h2>
 	<ul>
 		<li>local: @_album.Id</li>
@@ -48,7 +48,7 @@ else
 					<td>@track.DiscNumber</td>
 					<td>@track.Position</td>
 					<td>@track.Title</td>
-					<td>@string.Join(", ", track.Artists.Select(credit => credit.Artist.Name))</td>
+					<td>@string.Join(", ", track.Artists.Select(credit => credit.Artist.DisplayName))</td>
 					<td>@Length(track)</td>
 				</tr>
 			}

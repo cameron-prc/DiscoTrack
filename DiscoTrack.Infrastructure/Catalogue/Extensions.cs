@@ -16,6 +16,7 @@ internal static class Extensions
 			Id = artist.Id,
 			ExternalIds = externalIds[artist.Id].ToList(),
 			Name = artist.Name,
+			Disambiguation = artist.Disambiguation,
 			Tracked = artist.Tracked,
 			LastScannedAt = scans[artist.Id].ToDictionary(),
 		};
@@ -40,7 +41,7 @@ internal static class Extensions
 		return new AlbumArtist
 		{
 			Position = albumArtist.Position,
-			Artist = new Artist { Id = albumArtist.ArtistId, ExternalIds = externalIds[albumArtist.ArtistId].ToList(), Name = albumArtist.Name, Tracked = albumArtist.Tracked, LastScannedAt = scans[albumArtist.ArtistId].ToDictionary() },
+			Artist = new Artist { Id = albumArtist.ArtistId, ExternalIds = externalIds[albumArtist.ArtistId].ToList(), Name = albumArtist.Name, Disambiguation = albumArtist.Disambiguation, Tracked = albumArtist.Tracked, LastScannedAt = scans[albumArtist.ArtistId].ToDictionary() },
 		};
 	}
 
@@ -69,6 +70,7 @@ internal static class Extensions
 				Id = trackArtist.ArtistId,
 				ExternalIds = externalIds[trackArtist.ArtistId].ToList(),
 				Name = trackArtist.Name,
+				Disambiguation = trackArtist.Disambiguation,
 				Tracked = trackArtist.Tracked,
 				LastScannedAt = scans[trackArtist.ArtistId].ToDictionary(),
 			},
@@ -103,6 +105,7 @@ internal static class Extensions
 		{
 			Id = artist.Id,
 			Name = artist.Name,
+			Disambiguation = artist.Disambiguation,
 			Tracked = artist.Tracked,
 		};
 	}

@@ -14,13 +14,13 @@ namespace DiscoTrack.Infrastructure.Catalogue;
 public class SqliteCatalogue(IOptions<SqliteOptions> options) : ICatalogue
 {
 	// TODO: These need to be moved into stored procs once confirmed
-	private const string SelectArtists = "SELECT Id, Name, Tracked FROM Artists ORDER BY Name";
+	private const string SelectArtists = "SELECT Id, Name, Disambiguation, Tracked FROM Artists ORDER BY Name";
 
 	private const string SelectArtistExternalIds = "SELECT ArtistId, Provider, Value FROM ArtistExternalIds";
 
 	private const string SelectAlbums = """
 		SELECT al.Id, al.Title, al.Year, al.IsCompilation, al.Tracked,
-		       aa.Position, ar.Id AS ArtistId, ar.Name, ar.Tracked
+		       aa.Position, ar.Id AS ArtistId, ar.Name, ar.Disambiguation, ar.Tracked
 		FROM Albums al
 		LEFT JOIN AlbumArtists aa ON aa.AlbumId = al.Id
 		LEFT JOIN Artists ar ON ar.Id = aa.ArtistId
@@ -31,7 +31,7 @@ public class SqliteCatalogue(IOptions<SqliteOptions> options) : ICatalogue
 
 	private const string SelectArtistAlbums = """
 		SELECT al.Id, al.Title, al.Year, al.IsCompilation, al.Tracked,
-		       aa.Position, ar.Id AS ArtistId, ar.Name, ar.Tracked
+		       aa.Position, ar.Id AS ArtistId, ar.Name, ar.Disambiguation, ar.Tracked
 		FROM Albums al
 		JOIN AlbumArtists aa ON aa.AlbumId = al.Id
 		JOIN Artists ar ON ar.Id = aa.ArtistId
@@ -56,13 +56,13 @@ public class SqliteCatalogue(IOptions<SqliteOptions> options) : ICatalogue
 		)
 		""";
 
-	private const string SelectArtist = "SELECT Id, Name, Tracked FROM Artists WHERE Id = @ArtistId";
+	private const string SelectArtist = "SELECT Id, Name, Disambiguation, Tracked FROM Artists WHERE Id = @ArtistId";
 
 	private const string SelectArtistExternalIdsByArtist = "SELECT ArtistId, Provider, Value FROM ArtistExternalIds WHERE ArtistId = @ArtistId";
 
 	private const string SelectAlbum = """
 		SELECT al.Id, al.Title, al.Year, al.IsCompilation, al.Tracked,
-		       aa.Position, ar.Id AS ArtistId, ar.Name, ar.Tracked
+		       aa.Position, ar.Id AS ArtistId, ar.Name, ar.Disambiguation, ar.Tracked
 		FROM Albums al
 		LEFT JOIN AlbumArtists aa ON aa.AlbumId = al.Id
 		LEFT JOIN Artists ar ON ar.Id = aa.ArtistId
@@ -73,7 +73,7 @@ public class SqliteCatalogue(IOptions<SqliteOptions> options) : ICatalogue
 	private const string SelectAlbumExternalIdsByAlbum = "SELECT AlbumId, Provider, Value FROM AlbumExternalIds WHERE AlbumId = @AlbumId";
 
 	private const string SelectAlbumArtists = """
-		SELECT ar.Id, ar.Name, ar.Tracked
+		SELECT ar.Id, ar.Name, ar.Disambiguation, ar.Tracked
 		FROM Artists ar
 		JOIN AlbumArtists aa ON aa.ArtistId = ar.Id
 		WHERE aa.AlbumId = @AlbumId
@@ -87,8 +87,8 @@ public class SqliteCatalogue(IOptions<SqliteOptions> options) : ICatalogue
 		""";
 
 	private const string UpsertArtist = """
-		INSERT INTO Artists (Id, Name, Tracked) VALUES (@Id, @Name, @Tracked)
-		ON CONFLICT (Id) DO UPDATE SET Name = excluded.Name, Tracked = excluded.Tracked
+		INSERT INTO Artists (Id, Name, Disambiguation, Tracked) VALUES (@Id, @Name, @Disambiguation, @Tracked)
+		ON CONFLICT (Id) DO UPDATE SET Name = excluded.Name, Disambiguation = excluded.Disambiguation, Tracked = excluded.Tracked
 		""";
 
 	private const string DeleteArtistExternalIds = "DELETE FROM ArtistExternalIds WHERE ArtistId = @Id";
@@ -155,7 +155,7 @@ public class SqliteCatalogue(IOptions<SqliteOptions> options) : ICatalogue
 
 	private const string SelectAlbumTracks = """
 		SELECT t.Id, t.AlbumId, t.Title, t.DiscNumber, t.Position, t.DurationMs,
-			ta.Position AS CreditPosition, ar.Id AS ArtistId, ar.Name, ar.Tracked
+			ta.Position AS CreditPosition, ar.Id AS ArtistId, ar.Name, ar.Disambiguation, ar.Tracked
 		FROM Tracks t
 		LEFT JOIN TrackArtists ta ON ta.TrackId = t.Id
 		LEFT JOIN Artists ar ON ar.Id = ta.ArtistId
