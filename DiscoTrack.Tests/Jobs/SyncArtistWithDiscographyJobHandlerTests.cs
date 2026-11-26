@@ -1,6 +1,7 @@
 using DiscoTrack.Artists;
 using DiscoTrack.Common;
 using DiscoTrack.Discography.SyncArtistWithDiscography;
+using DiscoTrack.Jobs;
 using DiscoTrack.Jobs.JobHandlers;
 using Microsoft.Extensions.Logging;
 using Moq;
@@ -34,13 +35,13 @@ public class SyncArtistWithDiscographyJobHandlerTests
 	}
 
 	[Fact]
-	public async Task Logs_each_error_the_sync_returns()
+	public async Task Logs_each_error_the_sync_returns_and_fails_the_job()
 	{
 		_sync.Setup(sync => sync.Run(_artistId, It.IsAny<CancellationToken>()))
 			.ReturnsAsync(Either<IList<ISyncArtistWithDiscographyError>, SyncArtistWithDiscographyResponse>.Left(
 				[new UnableToSaveArtistError("database is locked"), new UnableToFindDiscographyArtistError()]));
 
-		await Handler().Execute(_artistId, CancellationToken.None);
+		await Assert.ThrowsAsync<JobFailedException>(() => Handler().Execute(_artistId, CancellationToken.None));
 
 		VerifyLogged(LogLevel.Error, Times.Exactly(2));
 		VerifyLogged(LogLevel.Information, Times.Never());

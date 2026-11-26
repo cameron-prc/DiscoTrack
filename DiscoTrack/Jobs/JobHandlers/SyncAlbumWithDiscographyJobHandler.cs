@@ -16,7 +16,8 @@ public class SyncAlbumWithDiscographyJobHandler(ISyncAlbumWithDiscographyService
 			{
 				LogError(albumId, error);
 			}
-			return;
+
+			throw new JobFailedException($"Discography sync for album {albumId} failed with {result.GetLeft.Count} errors");
 		}
 
 		var response = result.GetRight;

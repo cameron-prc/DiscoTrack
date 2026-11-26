@@ -16,7 +16,8 @@ public class SyncArtistWithDiscographyJobHandler(ISyncArtistWithDiscographyServi
 			{
 				LogError(artistId, error);
 			}
-			return;
+
+			throw new JobFailedException($"Discography sync for artist {artistId} failed with {result.GetLeft.Count} errors");
 		}
 
 		var response = result.GetRight;
