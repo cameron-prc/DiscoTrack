@@ -38,7 +38,9 @@ else
 
 	protected override async Task OnInitializedAsync()
 	{
-		_artists = await Catalogue.GetArtists(CancellationToken.None);
+		_artists = (await Catalogue.GetArtists(CancellationToken.None))
+			.Where(artist => artist.Tracked)
+			.ToList();
 		var albums = await Catalogue.GetAlbums(CancellationToken.None);
 		_albumCounts = albums
 			.SelectMany(album => album.Artists)

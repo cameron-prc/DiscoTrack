@@ -7,4 +7,5 @@ internal sealed class AlbumArtistDto
 	public ArtistId ArtistId { get; init; }
 	public int Position { get; init; }
 	public required string Name { get; init; }
+	public bool Tracked { get; init; }
 }

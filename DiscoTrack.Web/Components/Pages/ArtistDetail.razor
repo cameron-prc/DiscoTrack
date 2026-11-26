@@ -20,6 +20,7 @@ else
 	<h1>@_artist.Name</h1>
 	<ul>
 		<li>local: @_artist.Id</li>
+		<li>tracked: @_artist.Tracked</li>
 		@foreach (var externalId in _artist.ExternalIds)
 		{
 			<li>@externalId.Provider: @externalId.Value</li>

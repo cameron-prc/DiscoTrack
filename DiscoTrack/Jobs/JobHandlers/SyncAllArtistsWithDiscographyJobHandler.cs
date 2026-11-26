@@ -10,7 +10,9 @@ public class SyncAllArtistsWithDiscographyJobHandler(
 {
 	public async Task Execute(CancellationToken cancellationToken)
 	{
-		var artists = await catalogue.GetArtists(cancellationToken);
+		var artists = (await catalogue.GetArtists(cancellationToken))
+				.Where(artist => artist.Tracked)
+				.ToList();
 		var failedArtists = 0;
 
 		foreach (var artist in artists)

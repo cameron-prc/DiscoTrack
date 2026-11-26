@@ -11,8 +11,8 @@ public class SyncAllArtistsWithDiscographyJobHandlerTests
 {
 	private readonly Mock<ICatalogue> _catalogue = new();
 	private readonly Mock<ISyncArtistWithDiscographyJobHandler> _syncArtist = new();
-	private readonly Artist _tool = new() { Name = "Tool" };
-	private readonly Artist _puscifer = new() { Name = "Puscifer" };
+	private readonly Artist _tool = new() { Name = "Tool", Tracked = true };
+	private readonly Artist _puscifer = new() { Name = "Puscifer", Tracked = true };
 
 	public SyncAllArtistsWithDiscographyJobHandlerTests()
 	{
@@ -36,6 +36,17 @@ public class SyncAllArtistsWithDiscographyJobHandlerTests
 		await Handler().Execute(cts.Token);
 
 		Assert.Equal([_tool.Id, _puscifer.Id], synced);
+	}
+
+	[Fact]
+	public async Task Does_not_sync_an_untracked_artist()
+	{
+		_puscifer.Tracked = false;
+
+		await Handler().Execute(CancellationToken.None);
+
+		_syncArtist.Verify(syncArtist => syncArtist.Execute(_tool.Id, It.IsAny<CancellationToken>()), Times.Once);
+		_syncArtist.Verify(syncArtist => syncArtist.Execute(_puscifer.Id, It.IsAny<CancellationToken>()), Times.Never);
 	}
 
 	[Fact]

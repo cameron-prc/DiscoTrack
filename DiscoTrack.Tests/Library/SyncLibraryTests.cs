@@ -59,6 +59,30 @@ public class SyncLibraryTests
 	}
 
 	[Fact]
+	public async Task Imports_a_new_artist_as_tracked()
+	{
+		_source.Albums.Add(Album("alb-odelay", "Odelay", 1996, Beck));
+
+		await Sync().Run(CancellationToken.None);
+
+		Assert.True(Assert.Single(_catalogue.Artists).Tracked);
+	}
+
+	[Fact]
+	public async Task Tracks_and_saves_an_untracked_catalogue_artist_the_library_now_holds()
+	{
+		var tool = new Artist { ExternalIds = [new MusicBrainzArtistId("mb-tool")], Name = "Tool" };
+		_catalogue.Artists.Add(tool);
+		_source.Albums.Add(Album("alb-lateralus", "Lateralus", 2001, Tool));
+
+		var response = (await Sync().Run(CancellationToken.None)).GetRight;
+
+		Assert.Same(tool, Assert.Single(_catalogue.Artists));
+		Assert.True(tool.Tracked);
+		Assert.Contains(tool, response.Artists);
+	}
+
+	[Fact]
 	public async Task Maps_album_fields_and_one_based_credit_positions()
 	{
 		_source.Albums.Add(Album("alb-split", "Split", 2010, TheChecks, Beck));
@@ -227,8 +251,8 @@ public class SyncLibraryTests
 	[Fact]
 	public async Task Saves_only_the_catalogue_entities_whose_ids_changed()
 	{
-		var tool = new Artist { ExternalIds = [new SubsonicId("art-tool"), new MusicBrainzArtistId("mb-tool")], Name = "Tool" };
-		var shihad = new Artist { ExternalIds = [new SubsonicId("art-shihad-old"), new MusicBrainzArtistId("mb-shihad")], Name = "Shihad" };
+		var tool = new Artist { ExternalIds = [new SubsonicId("art-tool"), new MusicBrainzArtistId("mb-tool")], Name = "Tool", Tracked = true };
+		var shihad = new Artist { ExternalIds = [new SubsonicId("art-shihad-old"), new MusicBrainzArtistId("mb-shihad")], Name = "Shihad", Tracked = true };
 		_catalogue.Artists.AddRange([tool, shihad]);
 		_catalogue.Albums.Add(new Album { ExternalIds = [new SubsonicId("alb-lateralus")], Title = "Lateralus", Year = 2001 });
 		_catalogue.Albums.Add(new Album { ExternalIds = [new SubsonicId("alb-killjoy")], Title = "Killjoy", Year = 1995 });
@@ -264,7 +288,7 @@ public class SyncLibraryTests
 	{
 		var tool = new Artist { ExternalIds = [new SubsonicId("art-tool"), new MusicBrainzArtistId("mb-tool")], Name = "Tool" };
 		var lateralus = new Album { ExternalIds = [new SubsonicId("alb-lateralus"), new MusicBrainzReleaseId("mb-lateralus")], Title = "Lateralus", Year = 2001 };
-		var checks = new Artist { ExternalIds = [new SubsonicId("art-checks")], Name = "The Checks" };
+		var checks = new Artist { ExternalIds = [new SubsonicId("art-checks")], Name = "The Checks", Tracked = true };
 		var huntingWhales = new Album { ExternalIds = [new SubsonicId("alb-hunting-whales")], Title = "Hunting Whales", Year = 2007 };
 		_catalogue.Artists.AddRange([tool, checks]);
 		_catalogue.Albums.AddRange([lateralus, huntingWhales]);

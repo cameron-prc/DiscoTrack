@@ -57,6 +57,37 @@ public sealed class SqliteCatalogueTests : IDisposable
 		Assert.Equal("Shihad", artist.Name);
 	}
 
+	[Theory]
+	[InlineData(true)]
+	[InlineData(false)]
+	public async Task SaveArtist_round_trips_the_tracked_flag_on_the_artist_and_its_album_credits(bool tracked)
+	{
+		var tool = Artist("art-tool", "Tool");
+		tool.Tracked = tracked;
+		await SaveArtists(tool);
+		var lateralus = Album("alb-l", "Lateralus", 2001, Credit(tool, 1));
+		await SaveAlbums(lateralus);
+
+		Assert.Equal(tracked, Assert.Single(await _catalogue.GetArtists(CancellationToken.None)).Tracked);
+		Assert.Equal(tracked, (await _catalogue.GetArtist(tool.Id, CancellationToken.None))!.Tracked);
+		Assert.Equal(tracked, Assert.Single(await _catalogue.GetAlbumArtists(lateralus.Id, CancellationToken.None)).Tracked);
+		Assert.Equal(tracked, Assert.Single(await _catalogue.GetAlbums(CancellationToken.None)).Artists[0].Artist.Tracked);
+		Assert.Equal(tracked, (await _catalogue.GetAlbum(lateralus.Id, CancellationToken.None))!.Artists[0].Artist.Tracked);
+		Assert.Equal(tracked, Assert.Single(await _catalogue.GetArtistAlbums(tool.Id, CancellationToken.None)).Artists[0].Artist.Tracked);
+	}
+
+	[Fact]
+	public async Task SaveArtist_updates_the_tracked_flag_of_an_existing_artist()
+	{
+		var tool = Artist("art-tool", "Tool");
+		await SaveArtists(tool);
+
+		tool.Tracked = true;
+		await SaveArtists(tool);
+
+		Assert.True(Assert.Single(await _catalogue.GetArtists(CancellationToken.None)).Tracked);
+	}
+
 	[Fact]
 	public async Task SaveArtist_rejects_a_different_artist_with_the_same_external_id()
 	{

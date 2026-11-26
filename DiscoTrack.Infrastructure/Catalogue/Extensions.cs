@@ -14,6 +14,7 @@ internal static class Extensions
 			Id = artist.Id,
 			ExternalIds = externalIds[artist.Id].ToList(),
 			Name = artist.Name,
+			Tracked = artist.Tracked,
 		};
 	}
 
@@ -36,7 +37,7 @@ internal static class Extensions
 		return new AlbumArtist
 		{
 			Position = albumArtist.Position,
-			Artist = new Artist { Id = albumArtist.ArtistId, ExternalIds = externalIds[albumArtist.ArtistId].ToList(), Name = albumArtist.Name },
+			Artist = new Artist { Id = albumArtist.ArtistId, ExternalIds = externalIds[albumArtist.ArtistId].ToList(), Name = albumArtist.Name, Tracked = albumArtist.Tracked },
 		};
 	}
 
@@ -56,6 +57,7 @@ internal static class Extensions
 		{
 			Id = artist.Id,
 			Name = artist.Name,
+			Tracked = artist.Tracked,
 		};
 	}
 

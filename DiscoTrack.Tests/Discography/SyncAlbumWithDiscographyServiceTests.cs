@@ -201,6 +201,7 @@ public class SyncAlbumWithDiscographyServiceTests
 		Assert.Same(_tool, credits[0].Artist);
 		Assert.Equal("Puscifer", credits[1].Artist.Name);
 		Assert.Equal([new MusicBrainzArtistId("mb-puscifer")], credits[1].Artist.ExternalIds);
+		Assert.False(credits[1].Artist.Tracked);
 		_catalogue.Verify(catalogue => catalogue.SaveArtist(credits[1].Artist, It.IsAny<CancellationToken>()), Times.Once);
 		Assert.Equal([nameof(ICatalogue.SaveArtist), nameof(ICatalogue.SaveAlbum)], _saves);
 	}

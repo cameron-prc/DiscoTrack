@@ -25,7 +25,7 @@ public class SyncArtistWithDiscographyServiceTests
 	private readonly Mock<IDiscographyArtistResolver> _resolver = new();
 	private readonly Mock<AlbumSync.ISyncAlbumWithDiscographyService> _syncAlbum = new();
 	private readonly List<string> _calls = [];
-	private readonly Artist _tool = new() { ExternalIds = [new SubsonicId("art-tool")], Name = "TOOL" };
+	private readonly Artist _tool = new() { ExternalIds = [new SubsonicId("art-tool")], Name = "TOOL", Tracked = true };
 	private readonly Album _lateralus;
 	private readonly List<Album> _artistAlbums;
 	private readonly List<Album> _knownAlbums;
@@ -95,6 +95,19 @@ public class SyncArtistWithDiscographyServiceTests
 		await Run();
 
 		_catalogue.Verify(catalogue => catalogue.SaveArtist(It.IsAny<Artist>(), It.IsAny<CancellationToken>()), Times.Never);
+	}
+
+	[Fact]
+	public async Task Tracks_and_saves_an_untracked_artist_that_already_holds_the_artist_id_and_name()
+	{
+		_tool.ExternalIds = [new SubsonicId("art-tool"), ToolId];
+		_tool.Name = "Tool";
+		_tool.Tracked = false;
+
+		var result = await Run();
+
+		Assert.True(result.GetRight.Artist.Tracked);
+		_catalogue.Verify(catalogue => catalogue.SaveArtist(_tool, It.IsAny<CancellationToken>()), Times.Once);
 	}
 
 	[Fact]
@@ -244,6 +257,7 @@ public class SyncArtistWithDiscographyServiceTests
 		var response = (await Run()).GetRight;
 
 		var puscifer = Assert.Single(response.CreatedArtists);
+		Assert.False(puscifer.Tracked);
 		Assert.Equal("Puscifer", puscifer.Name);
 		Assert.Equal([DiscographyPuscifer.Id], puscifer.ExternalIds);
 		var created = Assert.Single(response.CreatedAlbums);
@@ -263,6 +277,7 @@ public class SyncArtistWithDiscographyServiceTests
 		var response = (await Run()).GetRight;
 
 		var puscifer = Assert.Single(response.CreatedArtists);
+		Assert.False(puscifer.Tracked);
 		Assert.All(response.CreatedAlbums, album => Assert.Contains(puscifer, album.Artists.Select(albumArtist => albumArtist.Artist)));
 	}
 

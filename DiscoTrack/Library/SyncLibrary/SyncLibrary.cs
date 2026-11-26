@@ -78,9 +78,10 @@ public class SyncLibrary(ICatalogue catalogue, ILibrarySource librarySource, ILo
 		var relinkedArtists = matches
 			.Where(match => match.Artist is not null)
 			.GroupBy(match => match.Artist!, match => match.LibraryArtist)
-			.Select(group => (LibraryArtists: group.ToList(), Artist: group.Key, PreviousExternalIds: group.Key.ExternalIds))
+			.Select(group => (LibraryArtists: group.ToList(), Artist: group.Key, PreviousExternalIds: group.Key.ExternalIds, PreviouslyTracked: group.Key.Tracked))
 			.Apply(match => match.Artist.SetExternalIds(match.LibraryArtists.Select(libraryArtist => libraryArtist.Id).ToList()))
-			.Where(match => !match.PreviousExternalIds.SequenceEqual(match.Artist.ExternalIds))
+			.Apply(match => match.Artist.Tracked = true)
+			.Where(match => !match.PreviousExternalIds.SequenceEqual(match.Artist.ExternalIds) || !match.PreviouslyTracked)
 			.Apply(match => logger.LogDebug("Importing {LibraryArtists} into existing artist {Artist}", match.LibraryArtists, match.Artist))
 			.Select(match => match.Artist);
 
@@ -144,6 +145,7 @@ public class SyncLibrary(ICatalogue catalogue, ILibrarySource librarySource, ILo
 		return new Artist
 		{
 			Name = libraryArtists[0].Name,
+			Tracked = true,
 			ExternalIds = libraryArtists.SelectMany(libraryArtist => libraryArtist.ExternalIds).Distinct().ToList(),
 		};
 	}

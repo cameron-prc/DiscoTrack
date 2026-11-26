@@ -7,6 +7,7 @@ public class Artist
 	public ArtistId Id { get; init; } = ArtistId.New();
 	public IReadOnlyList<ExternalId> ExternalIds { get; set; } = [];
 	public required string Name { get; set; }
+	public bool Tracked { get; set; }
 
 	public void SetExternalId(ExternalId externalId)
 	{

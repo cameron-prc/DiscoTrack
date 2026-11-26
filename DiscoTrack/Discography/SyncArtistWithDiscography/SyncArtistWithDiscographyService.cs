@@ -18,7 +18,7 @@ public class SyncArtistWithDiscographyService(
 	/// <summary>
 	/// <para>Syncs a catalogue artist and its albums with the discography, then adds the albums the catalogue is missing.</para>
 	/// <para>
-	/// First resolve the discography artist and save its id and name on the artist
+	/// First resolve the discography artist, save its id and name on the artist and track the artist
 	/// Second sync each of the artist's albums with its discography album
 	/// Third add each discography album no catalogue album holds as a new untracked album
 	/// </para>
@@ -70,8 +70,9 @@ public class SyncArtistWithDiscographyService(
 		var absorbedArtist = knownArtists
 				.FirstOrDefault(knownArtist => knownArtist.Id != artist.Id && knownArtist.ExternalIds.Contains(discographyArtist.Id));
 
-		if (absorbedArtist is not null || !artist.ExternalIds.Contains(discographyArtist.Id) || artist.Name != discographyArtist.Name)
+		if (absorbedArtist is not null || !artist.ExternalIds.Contains(discographyArtist.Id) || artist.Name != discographyArtist.Name || !artist.Tracked)
 		{
+			artist.Tracked = true;
 			artist.SetExternalId(discographyArtist.Id);
 			artist.SetExternalIds(artist.ExternalIds.Concat(absorbedArtist?.ExternalIds ?? []).Distinct().ToList());
 			artist.Name = discographyArtist.Name;
