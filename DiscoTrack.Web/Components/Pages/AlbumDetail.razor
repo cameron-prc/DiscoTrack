@@ -30,6 +30,30 @@ else
 	{
 		<p>Discography sync queued</p>
 	}
+	<p>Track Count: @_tracks.Count</p>
+	<table>
+		<thead>
+			<tr>
+				<th>Disc</th>
+				<th>#</th>
+				<th>Title</th>
+				<th>Artists</th>
+				<th>Length</th>
+			</tr>
+		</thead>
+		<tbody>
+			@foreach (var track in _tracks)
+			{
+				<tr>
+					<td>@track.DiscNumber</td>
+					<td>@track.Position</td>
+					<td>@track.Title</td>
+					<td>@string.Join(", ", track.Artists.Select(credit => credit.Artist.Name))</td>
+					<td>@Length(track)</td>
+				</tr>
+			}
+		</tbody>
+	</table>
 }
 
 @code {
@@ -41,13 +65,20 @@ else
 	private bool _syncQueued;
 	private IReadOnlyList<Artist> _artists = [];
 	private IReadOnlyList<ExternalId> _externalIds = [];
+	private IReadOnlyList<Track> _tracks = [];
 
 	protected override async Task OnInitializedAsync()
 	{
 		var albumId = new AlbumId(Id);
 		_album = await Catalogue.GetAlbum(albumId, CancellationToken.None);
 		_externalIds = _album.ExternalIds;
+		_tracks = await Catalogue.GetAlbumTracks(albumId, CancellationToken.None);
 		_loading = false;
+	}
+
+	private static string Length(Track track)
+	{
+		return track.DurationMs is { } durationMs ? TimeSpan.FromMilliseconds(durationMs).ToString(@"m\:ss") : "";
 	}
 
 	private async Task SyncDiscography()
