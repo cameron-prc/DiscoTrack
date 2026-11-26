@@ -6,5 +6,6 @@ public record UnableToConnectToCatalogueError(string Message) : ISyncArtistWithD
 public record UnableToFindArtistError() : ISyncArtistWithDiscographyError;
 public record UnableToConnectToDiscographyError(string Message) : ISyncArtistWithDiscographyError;
 public record UnableToFindDiscographyArtistError() : ISyncArtistWithDiscographyError;
+public record UnableToSyncVariousArtistsError() : ISyncArtistWithDiscographyError;
 public record UnableToSaveArtistError(string Message) : ISyncArtistWithDiscographyError;
 public record UnableToSaveAlbumError(string Message) : ISyncArtistWithDiscographyError;

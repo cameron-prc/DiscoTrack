@@ -53,6 +53,9 @@ public class SyncArtistWithDiscographyJobHandler(ISyncArtistWithDiscographyServi
 			case UnableToFindDiscographyArtistError:
 				logger.LogError("Discography sync for artist {ArtistId} failed: the discography has no matching artist", artistId);
 				break;
+			case UnableToSyncVariousArtistsError:
+				logger.LogError("Discography sync for artist {ArtistId} failed: the artist is the discography's various artists", artistId);
+				break;
 			case UnableToSaveArtistError saveArtist:
 				logger.LogError("Discography sync for artist {ArtistId} failed to save an artist: {Message}", artistId, saveArtist.Message);
 				break;

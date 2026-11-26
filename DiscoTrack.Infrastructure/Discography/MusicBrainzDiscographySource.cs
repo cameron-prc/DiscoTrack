@@ -13,6 +13,7 @@ public partial class MusicBrainzDiscographySource(IMusicBrainzClient client, IOp
 
 	private readonly int _pageSize = options.Value.PageSize;
 	private readonly int _searchSize = options.Value.SearchSize;
+	private readonly int _maxReleaseGroupPages = options.Value.MaxReleaseGroupPages;
 
 	public Provider ReleaseProvider
 	{
@@ -27,6 +28,11 @@ public partial class MusicBrainzDiscographySource(IMusicBrainzClient client, IOp
 	public Provider ArtistProvider
 	{
 		get { return Provider.MusicBrainzArtist; }
+	}
+
+	public ExternalId VariousArtistsId
+	{
+		get { return new MusicBrainzArtistId(Extensions.VariousArtistsId); }
 	}
 
 	public Task<DiscographyAlbum?> GetAlbum(ExternalId id, CancellationToken ct)
@@ -103,6 +109,11 @@ public partial class MusicBrainzDiscographySource(IMusicBrainzClient client, IOp
 
 		do
 		{
+			if (releaseGroups.Count >= _pageSize * _maxReleaseGroupPages)
+			{
+				throw new MusicBrainzException($"Artist {artistId.Value} has more than {releaseGroups.Count} release groups.");
+			}
+
 			releaseGroupPage = await client.BrowseReleaseGroups(artistId.Value, StudioAlbumTypes, _pageSize, releaseGroups.Count, ct);
 			releaseGroups.AddRange(releaseGroupPage);
 		}

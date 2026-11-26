@@ -18,4 +18,7 @@ public class MusicBrainzOptions
 
 	[Range(1, 100)]
 	public int SearchSize { get; set; } = 25;
+
+	[Range(1, 100)]
+	public int MaxReleaseGroupPages { get; set; } = 10;
 }

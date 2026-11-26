@@ -6,7 +6,7 @@ namespace DiscoTrack.Infrastructure.Discography;
 
 internal static class Extensions
 {
-	private const string VariousArtistsId = "89ad4ac3-39f7-470e-963a-56509c546377";
+	public const string VariousArtistsId = "89ad4ac3-39f7-470e-963a-56509c546377";
 
 	public static DiscographyAlbum ToDiscographyAlbum(this ReleaseGroup releaseGroup)
 	{

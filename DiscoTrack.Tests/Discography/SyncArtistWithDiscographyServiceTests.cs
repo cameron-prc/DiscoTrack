@@ -47,6 +47,7 @@ public class SyncArtistWithDiscographyServiceTests
 
 		_source.SetupGet(source => source.ReleaseGroupProvider).Returns(Provider.MusicBrainzReleaseGroup);
 		_source.SetupGet(source => source.ArtistProvider).Returns(Provider.MusicBrainzArtist);
+		_source.SetupGet(source => source.VariousArtistsId).Returns(new MusicBrainzArtistId("mb-various-artists"));
 		_source.Setup(source => source.GetArtistAlbums(ToolId, It.IsAny<CancellationToken>())).ReturnsAsync([DiscographyLateralus]);
 		_resolver.Setup(resolver => resolver.Resolve(_tool, _artistAlbums, It.IsAny<CancellationToken>())).ReturnsAsync(DiscographyTool);
 		_syncAlbum.Setup(syncAlbum => syncAlbum.Run(It.IsAny<AlbumId>(), It.IsAny<CancellationToken>()))
@@ -291,6 +292,17 @@ public class SyncArtistWithDiscographyServiceTests
 		Assert.IsType<UnableToFindDiscographyArtistError>(Assert.Single((await Run()).GetLeft));
 		_syncAlbum.Verify(syncAlbum => syncAlbum.Run(It.IsAny<AlbumId>(), It.IsAny<CancellationToken>()), Times.Never);
 		_catalogue.Verify(catalogue => catalogue.SaveArtist(It.IsAny<Artist>(), It.IsAny<CancellationToken>()), Times.Never);
+	}
+
+	[Fact]
+	public async Task Returns_an_error_without_saving_or_syncing_when_the_artist_is_various_artists()
+	{
+		var variousArtists = new DiscographyArtist(new MusicBrainzArtistId("mb-various-artists"), "Various Artists", null);
+		_resolver.Setup(resolver => resolver.Resolve(_tool, _artistAlbums, It.IsAny<CancellationToken>())).ReturnsAsync(variousArtists);
+
+		Assert.IsType<UnableToSyncVariousArtistsError>(Assert.Single((await Run()).GetLeft));
+		Assert.Empty(_calls);
+		_source.Verify(source => source.GetArtistAlbums(It.IsAny<ExternalId>(), It.IsAny<CancellationToken>()), Times.Never);
 	}
 
 	[Fact]

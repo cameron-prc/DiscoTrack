@@ -23,9 +23,15 @@ public class MusicBrainzDiscographySourceTests
 
 	private readonly Mock<IMusicBrainzClient> _client = new();
 
-	private MusicBrainzDiscographySource Source(int pageSize = 100, int searchSize = 25)
+	private MusicBrainzDiscographySource Source(int pageSize = 100, int searchSize = 25, int maxReleaseGroupPages = 10)
 	{
-		return new(_client.Object, TestMusicBrainzOptions.Create(pageSize, searchSize));
+		return new(_client.Object, TestMusicBrainzOptions.Create(pageSize, searchSize, maxReleaseGroupPages));
+	}
+
+	[Fact]
+	public void VariousArtistsId_is_the_MusicBrainz_various_artists_artist()
+	{
+		Assert.Equal(new MusicBrainzArtistId("89ad4ac3-39f7-470e-963a-56509c546377"), Source().VariousArtistsId);
 	}
 
 	[Fact]
@@ -228,6 +234,18 @@ public class MusicBrainzDiscographySourceTests
 		Assert.Equal(new MusicBrainzReleaseGroupId("rg-lateralus"), album.ReleaseGroupId);
 		Assert.Equal(2001, album.Year);
 		Assert.Equal([new DiscographyArtist(new MusicBrainzArtistId("mb-tool"), "Tool", "American rock band")], album.Artists);
+	}
+
+	[Fact]
+	public async Task GetArtistAlbums_stops_and_fails_once_the_artist_has_more_pages_than_allowed()
+	{
+		_client.Setup(client => client.BrowseReleaseGroups("mb-tool", It.IsAny<IReadOnlyList<string>>(), 2, It.IsAny<int>(), It.IsAny<CancellationToken>())).ReturnsAsync([Lateralus, Lateralus]);
+
+		var exception = await Assert.ThrowsAsync<MusicBrainzException>(
+			() => Source(pageSize: 2, maxReleaseGroupPages: 3).GetArtistAlbums(new MusicBrainzArtistId("mb-tool"), CancellationToken.None));
+
+		Assert.Equal("Artist mb-tool has more than 6 release groups.", exception.Message);
+		_client.Verify(client => client.BrowseReleaseGroups(It.IsAny<string>(), It.IsAny<IReadOnlyList<string>>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Exactly(3));
 	}
 
 	[Fact]

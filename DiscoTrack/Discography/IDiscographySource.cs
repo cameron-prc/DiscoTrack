@@ -7,6 +7,7 @@ public interface IDiscographySource
 	Provider ReleaseProvider { get; }
 	Provider ReleaseGroupProvider { get; }
 	Provider ArtistProvider { get; }
+	ExternalId VariousArtistsId { get; }
 
 	Task<DiscographyAlbum?> GetAlbum(ExternalId id, CancellationToken ct);
 	Task<DiscographyArtist?> GetArtist(ExternalId id, CancellationToken ct);

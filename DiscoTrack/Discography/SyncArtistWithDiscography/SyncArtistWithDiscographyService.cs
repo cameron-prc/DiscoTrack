@@ -62,6 +62,11 @@ public class SyncArtistWithDiscographyService(
 			return new List<ISyncArtistWithDiscographyError> { new UnableToFindDiscographyArtistError() };
 		}
 
+		if (discographyArtist.Id == source.VariousArtistsId)
+		{
+			return new List<ISyncArtistWithDiscographyError> { new UnableToSyncVariousArtistsError() };
+		}
+
 		var absorbedArtist = knownArtists
 				.FirstOrDefault(knownArtist => knownArtist.Id != artist.Id && knownArtist.ExternalIds.Contains(discographyArtist.Id));
 
