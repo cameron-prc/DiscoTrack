@@ -13,4 +13,9 @@ internal static class LibraryValues
 	{
 		return new LibraryAlbum(new SubsonicId(subsonicId), title, year, IsCompilation: false, artists);
 	}
+
+	public static LibraryTrack Track(string subsonicId, string albumSubsonicId, int discNumber, int trackNumber, string title, params LibraryArtist[] artists)
+	{
+		return new LibraryTrack(new SubsonicId(subsonicId), new SubsonicId(albumSubsonicId), title, discNumber, trackNumber, DurationSeconds: null, artists);
+	}
 }

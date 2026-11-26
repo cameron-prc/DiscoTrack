@@ -3,6 +3,7 @@ using DiscoTrack.Artists;
 using DiscoTrack.Catalogue;
 using DiscoTrack.Common;
 using DiscoTrack.ExternalIds;
+using DiscoTrack.Tracks;
 using Microsoft.Extensions.Logging;
 
 namespace DiscoTrack.Library.SyncLibrary;
@@ -14,6 +15,7 @@ public class SyncLibrary(ICatalogue catalogue, ILibrarySource librarySource, ILo
 		IReadOnlyList<Artist> knownArtists;
 		IReadOnlyList<Album> knownAlbums;
 		IReadOnlyList<LibraryAlbum> libraryAlbums;
+		IReadOnlyList<LibraryTrack> libraryTracks;
 
 		try
 		{
@@ -28,6 +30,7 @@ public class SyncLibrary(ICatalogue catalogue, ILibrarySource librarySource, ILo
 		try
 		{
 			libraryAlbums = await librarySource.GetAlbums(ct);
+			libraryTracks = await librarySource.GetTracks(ct);
 		}
 		catch (Exception exception) when (exception is not OperationCanceledException)
 		{
@@ -41,17 +44,24 @@ public class SyncLibrary(ICatalogue catalogue, ILibrarySource librarySource, ILo
 			.SelectMany(knownAlbum => knownAlbum.ExternalIds.Select(externalId => (ExternalId: externalId, Album: knownAlbum)))
 			.ToDictionary(pair => pair.ExternalId, pair => pair.Album);
 
+		var albumArtistIds = libraryAlbums
+			.SelectMany(album => album.Artists)
+			.Select(artist => artist.Id)
+			.ToHashSet();
 		var libraryArtists = libraryAlbums
 			.SelectMany(album => album.Artists)
+			.Concat(libraryTracks.SelectMany(track => track.Artists))
 			.DistinctBy(artist => artist.Id)
 			.ToList();
 
-		var newArtists = ImportArtists(libraryArtists, artistsLookup);
+		var newArtists = ImportArtists(libraryArtists, albumArtistIds, artistsLookup);
 		newArtists.Apply(artist => artist.ExternalIds.Apply(externalId => artistsLookup[externalId] = artist));
 
 		var distinctLibraryAlbums = libraryAlbums
 			.DistinctBy(album => album.Id)
 			.ToList();
+
+		var previouslyOwnedAlbums = knownAlbums.Where(HoldsLibraryId).ToHashSet();
 
 		var albumImports = ImportAlbums(distinctLibraryAlbums, albumsLookup, artistsLookup);
 		var newAlbums = albumImports.Where(import => import.IsRight).Select(import => import.GetRight).ToList();
@@ -61,15 +71,38 @@ public class SyncLibrary(ICatalogue catalogue, ILibrarySource librarySource, ILo
 
 		var savedArtists = artistSaves.Where(save => save.IsRight).Select(save => save.GetRight).ToList();
 		var savedAlbums = albumSaves.Where(save => save.IsRight).Select(save => save.GetRight).ToList();
+
+		var unsavedAlbums = albumSaves.Where(save => save.IsLeft).Select(save => save.GetLeft.Entity).OfType<Album>().ToHashSet();
+		var libraryTracksByAlbum = libraryTracks
+			.DistinctBy(track => track.Id)
+			.ToLookup(track => track.AlbumId);
+		var albumsWithLibraryTracks = knownAlbums
+			.Concat(newAlbums)
+			.Distinct()
+			.Where(album => HoldsLibraryId(album) || previouslyOwnedAlbums.Contains(album))
+			.Where(album => !unsavedAlbums.Contains(album));
+
+		var trackSaves = await SaveTracks(albumsWithLibraryTracks, libraryTracksByAlbum, artistsLookup, ct);
+
+		var savedTracks = trackSaves.Where(save => save.IsRight).SelectMany(save => save.GetRight).ToList();
 		var failures = albumImports.Where(import => import.IsLeft).Select(import => import.GetLeft)
 			.Concat(artistSaves.Where(save => save.IsLeft).Select(save => save.GetLeft))
 			.Concat(albumSaves.Where(save => save.IsLeft).Select(save => save.GetLeft))
+			.Concat(trackSaves.Where(save => save.IsLeft).Select(save => save.GetLeft))
 			.ToList();
 
-		return new SyncLibraryResponse(savedArtists, savedAlbums, failures);
+		return new SyncLibraryResponse(savedArtists, savedAlbums, savedTracks, failures);
 	}
 
-	private IReadOnlyList<Artist> ImportArtists(IReadOnlyList<LibraryArtist> libraryArtists, IReadOnlyDictionary<ExternalId, Artist> artistLookup)
+	private bool HoldsLibraryId(Album album)
+	{
+		return album.ExternalIds.Any(externalId => externalId.Provider == librarySource.Provider);
+	}
+
+	private IReadOnlyList<Artist> ImportArtists(
+		IReadOnlyList<LibraryArtist> libraryArtists,
+		IReadOnlySet<ExternalId> albumArtistIds,
+		IReadOnlyDictionary<ExternalId, Artist> artistLookup)
 	{
 		var matches = libraryArtists
 			.Select(libraryArtist => (LibraryArtist: libraryArtist, Artist: Find(libraryArtist.Id, libraryArtist.MusicBrainzId, artistLookup)))
@@ -80,15 +113,15 @@ public class SyncLibrary(ICatalogue catalogue, ILibrarySource librarySource, ILo
 			.GroupBy(match => match.Artist!, match => match.LibraryArtist)
 			.Select(group => (LibraryArtists: group.ToList(), Artist: group.Key, PreviousExternalIds: group.Key.ExternalIds, PreviouslyTracked: group.Key.Tracked))
 			.Apply(match => match.Artist.SetExternalIds(match.LibraryArtists.Select(libraryArtist => libraryArtist.Id).ToList()))
-			.Apply(match => match.Artist.Tracked = true)
-			.Where(match => !match.PreviousExternalIds.SequenceEqual(match.Artist.ExternalIds) || !match.PreviouslyTracked)
+			.Apply(match => match.Artist.Tracked = match.Artist.Tracked || match.LibraryArtists.Any(libraryArtist => albumArtistIds.Contains(libraryArtist.Id)))
+			.Where(match => !match.PreviousExternalIds.SequenceEqual(match.Artist.ExternalIds) || match.Artist.Tracked != match.PreviouslyTracked)
 			.Apply(match => logger.LogDebug("Importing {LibraryArtists} into existing artist {Artist}", match.LibraryArtists, match.Artist))
 			.Select(match => match.Artist);
 
 		var newArtists = matches
 			.Where(match => match.Artist is null)
 			.GroupBy(match => match.LibraryArtist.MusicBrainzId ?? match.LibraryArtist.Id, match => match.LibraryArtist)
-			.Select(group => (LibraryArtists: group.ToList(), Artist: BuildArtist(group.ToList())))
+			.Select(group => (LibraryArtists: group.ToList(), Artist: BuildArtist(group.ToList(), albumArtistIds)))
 			.Apply(match => logger.LogDebug("Importing {LibraryArtists} into new artist {Artist}", match.LibraryArtists, match.Artist))
 			.Select(match => match.Artist);
 
@@ -140,12 +173,12 @@ public class SyncLibrary(ICatalogue catalogue, ILibrarySource librarySource, ILo
 			?? (musicBrainzId is null ? null : lookup.GetValueOrDefault(musicBrainzId));
 	}
 
-	private static Artist BuildArtist(IReadOnlyList<LibraryArtist> libraryArtists)
+	private static Artist BuildArtist(IReadOnlyList<LibraryArtist> libraryArtists, IReadOnlySet<ExternalId> albumArtistIds)
 	{
 		return new Artist
 		{
 			Name = libraryArtists[0].Name,
-			Tracked = true,
+			Tracked = libraryArtists.Any(libraryArtist => albumArtistIds.Contains(libraryArtist.Id)),
 			ExternalIds = libraryArtists.SelectMany(libraryArtist => libraryArtist.ExternalIds).Distinct().ToList(),
 		};
 	}
@@ -185,6 +218,110 @@ public class SyncLibrary(ICatalogue catalogue, ILibrarySource librarySource, ILo
 			logger.LogWarning(exception, "Failed to import album {Album}", libraryAlbum);
 
 			return new SyncFailure(SyncAction.Import, libraryAlbum, exception.Message);
+		}
+	}
+
+	private IReadOnlyList<Track> ImportTracks(
+		Album album,
+		IReadOnlyList<Track> knownTracks,
+		IReadOnlyList<LibraryTrack> libraryTracks,
+		IReadOnlyDictionary<ExternalId, Artist> artistsByExternalId)
+	{
+		var tracks = knownTracks.ToList();
+		var libraryIds = new Dictionary<Track, List<ExternalId>>();
+
+		foreach (var libraryTrack in libraryTracks)
+		{
+			var track = tracks.FindMatch(libraryTrack.ExternalIds, libraryTrack.DiscNumber, libraryTrack.TrackNumber, libraryTrack.Title);
+
+			if (track is null)
+			{
+				track = BuildTrack(album, libraryTrack, artistsByExternalId);
+				tracks.Add(track);
+			}
+
+			libraryIds.TryAdd(track, []);
+			libraryIds[track].Add(libraryTrack.Id);
+		}
+
+		tracks
+			.Where(track => libraryIds.ContainsKey(track))
+			.Apply(track => track.SetExternalIds(libraryIds[track]));
+		tracks
+			.Where(track => !libraryIds.ContainsKey(track))
+			.Apply(track => track.RemoveExternalIds(librarySource.Provider));
+
+		return tracks;
+	}
+
+	private static Track BuildTrack(Album album, LibraryTrack libraryTrack, IReadOnlyDictionary<ExternalId, Artist> artistsByExternalId)
+	{
+		return new Track
+		{
+			AlbumId = album.Id,
+			Title = libraryTrack.Title,
+			DiscNumber = libraryTrack.DiscNumber,
+			Position = libraryTrack.TrackNumber,
+			DurationMs = libraryTrack.DurationSeconds * 1000,
+			ExternalIds = libraryTrack.ExternalIds,
+			Artists = libraryTrack.Artists
+				.Select(libraryArtist => FindArtist(libraryArtist, artistsByExternalId))
+				.Distinct()
+				.Select((artist, index) => new TrackArtist { Artist = artist, Position = index + 1 })
+				.ToList(),
+		};
+	}
+
+	private async Task<IReadOnlyList<Either<SyncFailure, IReadOnlyList<Track>>>> SaveTracks(
+		IEnumerable<Album> albums,
+		ILookup<ExternalId, LibraryTrack> libraryTracksByAlbum,
+		IReadOnlyDictionary<ExternalId, Artist> artistsByExternalId,
+		CancellationToken ct)
+	{
+		var saves = new List<Either<SyncFailure, IReadOnlyList<Track>>>();
+
+		foreach (var album in albums)
+		{
+			saves.Add(await SaveAlbumTracks(album, libraryTracksByAlbum, artistsByExternalId, ct));
+		}
+
+		return saves;
+	}
+
+	private async Task<Either<SyncFailure, IReadOnlyList<Track>>> SaveAlbumTracks(
+		Album album,
+		ILookup<ExternalId, LibraryTrack> libraryTracksByAlbum,
+		IReadOnlyDictionary<ExternalId, Artist> artistsByExternalId,
+		CancellationToken ct)
+	{
+		try
+		{
+			var knownTracks = await catalogue.GetAlbumTracks(album.Id, ct);
+			var previousExternalIds = knownTracks.ToDictionary(track => track.Id, track => track.ExternalIds);
+			var libraryTracks = album.ExternalIds
+				.Where(externalId => externalId.Provider == librarySource.Provider)
+				.SelectMany(externalId => libraryTracksByAlbum[externalId])
+				.ToList();
+
+			var tracks = ImportTracks(album, knownTracks, libraryTracks, artistsByExternalId);
+			var changedTracks = tracks
+				.Where(track => !previousExternalIds.TryGetValue(track.Id, out var externalIds) || !externalIds.SequenceEqual(track.ExternalIds))
+				.ToList();
+
+			if (changedTracks.Count > 0)
+			{
+				logger.LogDebug("Importing {TrackCount} tracks into {Album}", changedTracks.Count, album);
+
+				await catalogue.SaveAlbumTracks(album.Id, tracks, ct);
+			}
+
+			return Either<SyncFailure, IReadOnlyList<Track>>.Right(changedTracks);
+		}
+		catch (Exception exception) when (exception is not OperationCanceledException)
+		{
+			logger.LogWarning(exception, "Failed to import the tracks of {Album}", album);
+
+			return new SyncFailure(SyncAction.Save, album, exception.Message);
 		}
 	}
 

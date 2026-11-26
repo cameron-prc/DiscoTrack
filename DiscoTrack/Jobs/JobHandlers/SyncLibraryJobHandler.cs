@@ -24,9 +24,10 @@ public class SyncLibraryJobHandler(SyncLibrary syncLibrary, ILogger<SyncLibraryJ
 		var response = result.GetRight;
 
 		logger.LogInformation(
-			"Library sync completed. {ArtistCount} artists and {AlbumCount} albums imported",
+			"Library sync completed. {ArtistCount} artists, {AlbumCount} albums and {TrackCount} tracks imported",
 			response.Artists.Count,
-			response.Albums.Count);
+			response.Albums.Count,
+			response.Tracks.Count);
 
 		if (response.Failures.Any())
 		{

@@ -4,6 +4,7 @@ using DiscoTrack.Catalogue;
 using DiscoTrack.ExternalIds;
 using DiscoTrack.Library;
 using DiscoTrack.Library.SyncLibrary;
+using DiscoTrack.Tracks;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using static DiscoTrack.Tests.Library.LibraryValues;
@@ -14,6 +15,8 @@ public class SyncLibraryTests
 {
 	private static readonly LibraryArtist Tool = new(new SubsonicId("art-tool"), "Tool", new MusicBrainzArtistId("mb-tool"));
 	private static readonly LibraryArtist Shihad = new(new SubsonicId("art-shihad"), "Shihad", new MusicBrainzArtistId("mb-shihad"));
+	private static readonly LibraryArtist Puscifer = new(new SubsonicId("art-puscifer"), "Puscifer");
+	private static readonly LibraryArtist CarinaRound = new(new SubsonicId("art-carina"), "Carina Round");
 
 	private readonly FakeCatalogue _catalogue = new();
 	private readonly FakeLibrarySource _source = new();
@@ -218,7 +221,7 @@ public class SyncLibraryTests
 
 		Assert.Empty(result.GetRight.Artists);
 		Assert.Empty(result.GetRight.Albums);
-		Assert.Equal([nameof(FakeCatalogue.GetArtists), nameof(FakeCatalogue.GetAlbums)], _catalogue.Calls);
+		Assert.Equal([nameof(FakeCatalogue.GetArtists), nameof(FakeCatalogue.GetAlbums), nameof(FakeCatalogue.GetAlbumTracks)], _catalogue.Calls);
 		Assert.Equal(
 			[new SubsonicId("art-wolf-alice"), new MusicBrainzArtistId("mb-wolf-alice"), new SubsonicId("art-wolf-alce")],
 			Assert.Single(_catalogue.Artists).ExternalIds);
@@ -328,7 +331,7 @@ public class SyncLibraryTests
 
 		await Sync().Run(CancellationToken.None);
 
-		Assert.Equal([nameof(FakeCatalogue.GetArtists), nameof(FakeCatalogue.GetAlbums)], _catalogue.Calls);
+		Assert.Equal([nameof(FakeCatalogue.GetArtists), nameof(FakeCatalogue.GetAlbums), nameof(FakeCatalogue.GetAlbumTracks)], _catalogue.Calls);
 	}
 
 	[Fact]
@@ -355,8 +358,296 @@ public class SyncLibraryTests
 		await Sync().Run(CancellationToken.None);
 
 		Assert.Equal(
-			[nameof(FakeCatalogue.GetArtists), nameof(FakeCatalogue.GetAlbums), nameof(FakeCatalogue.SaveArtist), nameof(FakeCatalogue.SaveAlbum)],
+			[nameof(FakeCatalogue.GetArtists), nameof(FakeCatalogue.GetAlbums), nameof(FakeCatalogue.SaveArtist), nameof(FakeCatalogue.SaveAlbum), nameof(FakeCatalogue.GetAlbumTracks)],
 			_catalogue.Calls);
+	}
+
+	[Fact]
+	public async Task Imports_the_tracks_of_a_new_album_with_their_fields_ids_and_credits()
+	{
+		_source.Albums.Add(Album("alb-parole", "Conditions of My Parole", 2011, Puscifer));
+		_source.Tracks.AddRange([
+			Track("song-tiny", "alb-parole", 1, 3, "Tiny Monsters", Puscifer, CarinaRound) with { DurationSeconds = 268, MusicBrainzId = new MusicBrainzRecordingId("rec-tiny") },
+			Track("song-toma", "alb-parole", 1, 5, "Toma", Puscifer),
+		]);
+
+		var response = (await Sync().Run(CancellationToken.None)).GetRight;
+
+		var album = Assert.Single(_catalogue.Albums);
+		var tracks = _catalogue.Tracks[album.Id];
+		Assert.Equal(["Tiny Monsters", "Toma"], tracks.Select(track => track.Title));
+		Assert.Equal(tracks, response.Tracks);
+		var tiny = tracks[0];
+		Assert.Equal(album.Id, tiny.AlbumId);
+		Assert.Equal(1, tiny.DiscNumber);
+		Assert.Equal(3, tiny.Position);
+		Assert.Equal(268000, tiny.DurationMs);
+		Assert.Equal([new SubsonicId("song-tiny"), new MusicBrainzRecordingId("rec-tiny")], tiny.ExternalIds);
+		Assert.Equal(["Puscifer", "Carina Round"], tiny.Artists.Select(credit => credit.Artist.Name));
+		Assert.Equal([1, 2], tiny.Artists.Select(credit => credit.Position));
+		Assert.Null(tracks[1].DurationMs);
+	}
+
+	[Fact]
+	public async Task Credits_a_track_on_the_catalogue_artists_and_credits_an_artist_listed_twice_once()
+	{
+		_source.Albums.Add(Album("alb-parole", "Conditions of My Parole", 2011, Puscifer));
+		_source.Tracks.Add(Track("song-tiny", "alb-parole", 1, 3, "Tiny Monsters", Puscifer, Puscifer));
+
+		await Sync().Run(CancellationToken.None);
+
+		var credit = Assert.Single(Assert.Single(_catalogue.Tracks.Values.Single()).Artists);
+		Assert.Same(Assert.Single(_catalogue.Artists), credit.Artist);
+	}
+
+	[Fact]
+	public async Task Adds_an_artist_credited_only_on_tracks_as_untracked()
+	{
+		_source.Albums.Add(Album("alb-parole", "Conditions of My Parole", 2011, Puscifer));
+		_source.Tracks.Add(Track("song-tiny", "alb-parole", 1, 3, "Tiny Monsters", Puscifer, CarinaRound));
+
+		await Sync().Run(CancellationToken.None);
+
+		Assert.Equal([("Puscifer", true), ("Carina Round", false)], _catalogue.Artists.Select(artist => (artist.Name, artist.Tracked)));
+		Assert.Equal([new SubsonicId("art-carina")], _catalogue.Artists[1].ExternalIds);
+	}
+
+	[Fact]
+	public async Task Leaves_an_untracked_catalogue_artist_untracked_when_the_library_only_credits_it_on_tracks()
+	{
+		var carina = new Artist { ExternalIds = [new SubsonicId("art-carina")], Name = "Carina Round" };
+		_catalogue.Artists.Add(carina);
+		_source.Albums.Add(Album("alb-parole", "Conditions of My Parole", 2011, Puscifer));
+		_source.Tracks.Add(Track("song-tiny", "alb-parole", 1, 3, "Tiny Monsters", Puscifer, CarinaRound));
+
+		var response = (await Sync().Run(CancellationToken.None)).GetRight;
+
+		Assert.False(carina.Tracked);
+		Assert.Equal([new SubsonicId("art-carina")], carina.ExternalIds);
+		Assert.DoesNotContain(carina, response.Artists);
+	}
+
+	[Fact]
+	public async Task A_second_run_over_the_same_tracks_saves_no_tracks()
+	{
+		_source.Albums.Add(Album("alb-parole", "Conditions of My Parole", 2011, Puscifer));
+		_source.Tracks.Add(Track("song-tiny", "alb-parole", 1, 3, "Tiny Monsters", Puscifer, CarinaRound));
+		await Sync().Run(CancellationToken.None);
+		_catalogue.Calls.Clear();
+
+		var response = (await Sync().Run(CancellationToken.None)).GetRight;
+
+		Assert.Empty(response.Tracks);
+		Assert.Equal([nameof(FakeCatalogue.GetArtists), nameof(FakeCatalogue.GetAlbums), nameof(FakeCatalogue.GetAlbumTracks)], _catalogue.Calls);
+	}
+
+	[Fact]
+	public async Task Adds_a_track_that_is_new_to_an_album_already_in_the_catalogue()
+	{
+		_source.Albums.Add(Album("alb-parole", "Conditions of My Parole", 2011, Puscifer));
+		_source.Tracks.Add(Track("song-tiny", "alb-parole", 1, 3, "Tiny Monsters", Puscifer));
+		await Sync().Run(CancellationToken.None);
+		_source.Tracks.Add(Track("song-toma", "alb-parole", 1, 5, "Toma", Puscifer));
+
+		var response = (await Sync().Run(CancellationToken.None)).GetRight;
+
+		Assert.Equal(["Tiny Monsters", "Toma"], _catalogue.Tracks.Values.Single().Select(track => track.Title));
+		Assert.Equal("Toma", Assert.Single(response.Tracks).Title);
+	}
+
+	[Fact]
+	public async Task Gives_the_library_id_to_a_catalogue_track_holding_the_same_recording_id()
+	{
+		var (album, missing) = await OwnedAlbumWithTrack(new Track
+		{
+			AlbumId = default, Title = "Tiny Monsters (album version)", DiscNumber = 1, Position = 9, ExternalIds = [new MusicBrainzRecordingId("rec-tiny")],
+		});
+		_source.Tracks.Add(Track("song-tiny", "alb-parole", 1, 3, "Tiny Monsters", Puscifer) with { MusicBrainzId = new MusicBrainzRecordingId("rec-tiny") });
+
+		await Sync().Run(CancellationToken.None);
+
+		var track = Assert.Single(_catalogue.Tracks[album.Id]);
+		Assert.Equal(missing.Id, track.Id);
+		Assert.Equal([new MusicBrainzRecordingId("rec-tiny"), new SubsonicId("song-tiny")], track.ExternalIds);
+		Assert.Equal("Tiny Monsters (album version)", track.Title);
+	}
+
+	[Fact]
+	public async Task Gives_the_library_id_to_a_catalogue_track_at_the_same_disc_and_position_with_a_matching_title()
+	{
+		var (album, missing) = await OwnedAlbumWithTrack(new Track
+		{
+			AlbumId = default, Title = "Tiny Monsters", DiscNumber = 1, Position = 3, ExternalIds = [new MusicBrainzRecordingId("rec-tiny")],
+		});
+		_source.Tracks.Add(Track("song-tiny", "alb-parole", 1, 3, "tiny monsters!", Puscifer));
+
+		await Sync().Run(CancellationToken.None);
+
+		var track = Assert.Single(_catalogue.Tracks[album.Id]);
+		Assert.Equal(missing.Id, track.Id);
+		Assert.Equal([new MusicBrainzRecordingId("rec-tiny"), new SubsonicId("song-tiny")], track.ExternalIds);
+	}
+
+	[Theory]
+	[InlineData(2, 3, "Tiny Monsters")]
+	[InlineData(1, 4, "Tiny Monsters")]
+	[InlineData(1, 3, "Toma")]
+	public async Task Adds_a_track_when_the_disc_position_or_title_differs_from_the_catalogue_track(int discNumber, int trackNumber, string title)
+	{
+		var (album, _) = await OwnedAlbumWithTrack(new Track { AlbumId = default, Title = "Tiny Monsters", DiscNumber = 1, Position = 3 });
+		_source.Tracks.Add(Track("song-other", "alb-parole", discNumber, trackNumber, title, Puscifer));
+
+		await Sync().Run(CancellationToken.None);
+
+		Assert.Equal(2, _catalogue.Tracks[album.Id].Count);
+	}
+
+	[Fact]
+	public async Task Keeps_two_different_recordings_at_the_same_position_as_separate_tracks()
+	{
+		var (album, _) = await OwnedAlbumWithTrack(new Track
+		{
+			AlbumId = default, Title = "Tiny Monsters", DiscNumber = 1, Position = 3, ExternalIds = [new MusicBrainzRecordingId("rec-tiny")],
+		});
+		_source.Tracks.Add(Track("song-tiny", "alb-parole", 1, 3, "Tiny Monsters", Puscifer) with { MusicBrainzId = new MusicBrainzRecordingId("rec-tiny-remix") });
+
+		await Sync().Run(CancellationToken.None);
+
+		Assert.Equal(
+			[[new MusicBrainzRecordingId("rec-tiny")], [new SubsonicId("song-tiny"), new MusicBrainzRecordingId("rec-tiny-remix")]],
+			_catalogue.Tracks[album.Id].Select(track => track.ExternalIds));
+	}
+
+	[Fact]
+	public async Task One_track_on_two_library_albums_of_the_same_catalogue_album_holds_both_library_ids()
+	{
+		_source.Albums.AddRange([
+			Album("alb-parole", "Conditions of My Parole", 2011, Puscifer) with { MusicBrainzId = new MusicBrainzReleaseId("mb-parole") },
+			Album("alb-parole-rip", "Conditions of My Parole", 2011, Puscifer) with { MusicBrainzId = new MusicBrainzReleaseId("mb-parole") },
+		]);
+		_source.Tracks.AddRange([
+			Track("song-tiny", "alb-parole", 1, 3, "Tiny Monsters", Puscifer) with { MusicBrainzId = new MusicBrainzRecordingId("rec-tiny") },
+			Track("song-tiny-rip", "alb-parole-rip", 1, 1, "Tiny Monsters", Puscifer) with { MusicBrainzId = new MusicBrainzRecordingId("rec-tiny") },
+			Track("song-bonus", "alb-parole-rip", 1, 2, "Bonus", Puscifer),
+		]);
+
+		await Sync().Run(CancellationToken.None);
+
+		var tracks = _catalogue.Tracks[Assert.Single(_catalogue.Albums).Id];
+		Assert.Equal(["Tiny Monsters", "Bonus"], tracks.Select(track => track.Title));
+		Assert.Equal([new SubsonicId("song-tiny"), new MusicBrainzRecordingId("rec-tiny"), new SubsonicId("song-tiny-rip")], tracks[0].ExternalIds);
+	}
+
+	[Fact]
+	public async Task Removes_the_library_id_of_a_track_no_longer_in_the_library_and_keeps_the_track()
+	{
+		_source.Albums.Add(Album("alb-parole", "Conditions of My Parole", 2011, Puscifer));
+		_source.Tracks.AddRange([
+			Track("song-tiny", "alb-parole", 1, 3, "Tiny Monsters", Puscifer) with { MusicBrainzId = new MusicBrainzRecordingId("rec-tiny") },
+			Track("song-toma", "alb-parole", 1, 5, "Toma", Puscifer),
+		]);
+		await Sync().Run(CancellationToken.None);
+		_source.Tracks.RemoveAt(0);
+
+		var response = (await Sync().Run(CancellationToken.None)).GetRight;
+
+		var tracks = _catalogue.Tracks.Values.Single();
+		Assert.Equal([[new MusicBrainzRecordingId("rec-tiny")], [new SubsonicId("song-toma")]], tracks.Select(track => track.ExternalIds));
+		Assert.Equal("Tiny Monsters", Assert.Single(response.Tracks).Title);
+	}
+
+	[Fact]
+	public async Task Replaces_the_library_id_of_a_track_whose_file_was_replaced()
+	{
+		_source.Albums.Add(Album("alb-parole", "Conditions of My Parole", 2011, Puscifer));
+		_source.Tracks.Add(Track("song-tiny", "alb-parole", 1, 3, "Tiny Monsters", Puscifer));
+		await Sync().Run(CancellationToken.None);
+		_source.Tracks[0] = Track("song-tiny-flac", "alb-parole", 1, 3, "Tiny Monsters", Puscifer);
+
+		await Sync().Run(CancellationToken.None);
+
+		Assert.Equal([new SubsonicId("song-tiny-flac")], Assert.Single(_catalogue.Tracks.Values.Single()).ExternalIds);
+	}
+
+	[Fact]
+	public async Task Removes_the_library_ids_of_the_tracks_of_an_album_no_longer_in_the_library()
+	{
+		_source.Albums.Add(Album("alb-parole", "Conditions of My Parole", 2011, Puscifer));
+		_source.Tracks.Add(Track("song-tiny", "alb-parole", 1, 3, "Tiny Monsters", Puscifer));
+		await Sync().Run(CancellationToken.None);
+		_source.Albums.Clear();
+		_source.Tracks.Clear();
+
+		await Sync().Run(CancellationToken.None);
+
+		var track = Assert.Single(_catalogue.Tracks.Values.Single());
+		Assert.Equal("Tiny Monsters", track.Title);
+		Assert.Empty(track.ExternalIds);
+	}
+
+	[Fact]
+	public async Task Does_not_read_the_tracks_of_albums_the_library_never_held()
+	{
+		_catalogue.Albums.Add(new Album { ExternalIds = [new MusicBrainzReleaseGroupId("rg-undertow")], Title = "Undertow", Year = 1993 });
+
+		await Sync().Run(CancellationToken.None);
+
+		Assert.DoesNotContain(nameof(FakeCatalogue.GetAlbumTracks), _catalogue.Calls);
+	}
+
+	[Fact]
+	public async Task Imports_no_tracks_for_an_album_it_could_not_import()
+	{
+		_source.Albums.Add(Album("alb-untagged", "Untagged", null, TheChecks));
+		_source.Tracks.Add(Track("song-untagged", "alb-untagged", 1, 1, "Untagged", TheChecks));
+
+		var response = (await Sync().Run(CancellationToken.None)).GetRight;
+
+		Assert.Empty(response.Tracks);
+		Assert.Empty(_catalogue.Tracks);
+	}
+
+	[Fact]
+	public async Task Imports_no_tracks_for_an_album_it_could_not_save()
+	{
+		_source.Albums.Add(Album("alb-parole", "Conditions of My Parole", 2011, Puscifer));
+		_source.Tracks.Add(Track("song-tiny", "alb-parole", 1, 3, "Tiny Monsters", Puscifer));
+		_catalogue.FailingMethod = nameof(FakeCatalogue.SaveAlbum);
+
+		var response = (await Sync().Run(CancellationToken.None)).GetRight;
+
+		Assert.Empty(response.Tracks);
+		Assert.DoesNotContain(nameof(FakeCatalogue.GetAlbumTracks), _catalogue.Calls);
+	}
+
+	[Theory]
+	[InlineData(nameof(FakeCatalogue.GetAlbumTracks))]
+	[InlineData(nameof(FakeCatalogue.SaveAlbumTracks))]
+	public async Task A_failed_track_read_or_save_is_reported_against_the_album(string failingMethod)
+	{
+		_source.Albums.Add(Album("alb-parole", "Conditions of My Parole", 2011, Puscifer));
+		_source.Tracks.Add(Track("song-tiny", "alb-parole", 1, 3, "Tiny Monsters", Puscifer));
+		_catalogue.FailingMethod = failingMethod;
+
+		var response = (await Sync().Run(CancellationToken.None)).GetRight;
+
+		Assert.Empty(response.Tracks);
+		var failure = Assert.Single(response.Failures);
+		Assert.Equal(SyncAction.Save, failure.Action);
+		Assert.Same(Assert.Single(_catalogue.Albums), failure.Entity);
+	}
+
+	[Fact]
+	public async Task Returns_a_read_library_error_when_reading_the_tracks_fails_and_writes_nothing()
+	{
+		_source.Albums.Add(Album("alb-hunting-whales", "Hunting Whales", 2007, TheChecks));
+		_source.FailingMethod = nameof(FakeLibrarySource.GetTracks);
+
+		var result = await Sync().Run(CancellationToken.None);
+
+		Assert.IsType<FailedToReadLibraryError>(Assert.Single(result.GetLeft));
+
+		AssertNothingWritten();
 	}
 
 	[Fact]
@@ -404,6 +695,7 @@ public class SyncLibraryTests
 		var catalogue = new Mock<ICatalogue>();
 		catalogue.Setup(c => c.GetArtists(It.IsAny<CancellationToken>())).ReturnsAsync([]);
 		catalogue.Setup(c => c.GetAlbums(It.IsAny<CancellationToken>())).ReturnsAsync([]);
+		catalogue.Setup(c => c.GetAlbumTracks(It.IsAny<AlbumId>(), It.IsAny<CancellationToken>())).ReturnsAsync([]);
 		catalogue
 			.Setup(c => c.SaveArtist(It.Is<Artist>(artist => artist.Name == "The Checks"), It.IsAny<CancellationToken>()))
 			.ThrowsAsync(new InvalidOperationException("database is locked"));
@@ -428,6 +720,7 @@ public class SyncLibraryTests
 		var catalogue = new Mock<ICatalogue>();
 		catalogue.Setup(c => c.GetArtists(It.IsAny<CancellationToken>())).ReturnsAsync([]);
 		catalogue.Setup(c => c.GetAlbums(It.IsAny<CancellationToken>())).ReturnsAsync([]);
+		catalogue.Setup(c => c.GetAlbumTracks(It.IsAny<AlbumId>(), It.IsAny<CancellationToken>())).ReturnsAsync([]);
 		catalogue
 			.Setup(c => c.SaveAlbum(It.Is<Album>(album => album.Title == "Hunting Whales"), It.IsAny<CancellationToken>()))
 			.ThrowsAsync(new InvalidOperationException("database is locked"));
@@ -453,6 +746,7 @@ public class SyncLibraryTests
 		var catalogue = new Mock<ICatalogue>();
 		catalogue.Setup(c => c.GetArtists(It.IsAny<CancellationToken>())).ReturnsAsync([]);
 		catalogue.Setup(c => c.GetAlbums(It.IsAny<CancellationToken>())).ReturnsAsync([]);
+		catalogue.Setup(c => c.GetAlbumTracks(It.IsAny<AlbumId>(), It.IsAny<CancellationToken>())).ReturnsAsync([]);
 		catalogue
 			.Setup(c => c.SaveArtist(It.IsAny<Artist>(), It.IsAny<CancellationToken>()))
 			.ThrowsAsync(new OperationCanceledException());
@@ -528,8 +822,27 @@ public class SyncLibraryTests
 		AssertNothingWritten();
 	}
 
+	private async Task<(Album Album, Track Track)> OwnedAlbumWithTrack(Track template)
+	{
+		_source.Albums.Add(Album("alb-parole", "Conditions of My Parole", 2011, Puscifer));
+		await Sync().Run(CancellationToken.None);
+		var album = Assert.Single(_catalogue.Albums);
+		var track = new Track
+		{
+			AlbumId = album.Id,
+			Title = template.Title,
+			DiscNumber = template.DiscNumber,
+			Position = template.Position,
+			ExternalIds = template.ExternalIds,
+		};
+		_catalogue.Tracks[album.Id] = [track];
+
+		return (album, track);
+	}
+
 	private void AssertNothingWritten()
 	{
+		Assert.DoesNotContain(nameof(FakeCatalogue.SaveAlbumTracks), _catalogue.Calls);
 		Assert.DoesNotContain(nameof(FakeCatalogue.SaveArtist), _catalogue.Calls);
 		Assert.DoesNotContain(nameof(FakeCatalogue.SaveAlbum), _catalogue.Calls);
 		Assert.Empty(_catalogue.Artists);
