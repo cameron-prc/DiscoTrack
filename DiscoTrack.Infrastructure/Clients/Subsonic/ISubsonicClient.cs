@@ -6,4 +6,5 @@ public interface ISubsonicClient
 {
 	Task<IReadOnlyList<AlbumID3>> GetAlbumList2(AlbumListType type, int size, int offset, CancellationToken ct);
 	Task<IReadOnlyList<IndexID3>> GetArtists(CancellationToken ct);
+	Task<IReadOnlyList<Child>> Search3(string query, int songCount, int songOffset, CancellationToken ct);
 }

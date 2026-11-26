@@ -1,0 +1,73 @@
+{
+ "subsonic-response": {
+  "status": "ok",
+  "version": "1.16.1",
+  "type": "navidrome",
+  "serverVersion": "0.64.2",
+  "openSubsonic": true,
+  "searchResult3": {
+   "song": [
+    {
+     "id": "2kq1Fl3wNBhHfLcgSKBwVn",
+     "parent": "6NhcvrbascKsO9WepfYLYD",
+     "isDir": false,
+     "title": "Third Eye",
+     "album": "Salival",
+     "artist": "Tool",
+     "track": 1,
+     "year": 2000,
+     "duration": 854,
+     "discNumber": 1,
+     "albumId": "6NhcvrbascKsO9WepfYLYD",
+     "artistId": "3LZNqFXV2xMsnuH7Iel2FT",
+     "type": "music",
+     "musicBrainzId": "b3f1f1a4-6d55-4c5e-9d0e-6e0c2a3d9f10",
+     "artists": [
+      {
+       "id": "3LZNqFXV2xMsnuH7Iel2FT",
+       "name": "Tool"
+      }
+     ],
+     "displayArtist": "Tool"
+    },
+    {
+     "id": "5dWmXl0tYq8C0pJt4nZb1R",
+     "parent": "7d4hap8bMFOHPduaTvwlk4",
+     "isDir": false,
+     "title": "Tiny Monsters",
+     "album": "Conditions of My Parole",
+     "artist": "Puscifer feat. Carina Round",
+     "track": 3,
+     "duration": 268,
+     "discNumber": 1,
+     "albumId": "7d4hap8bMFOHPduaTvwlk4",
+     "artistId": "3BCOoHVnn287SKIxXFdoZy",
+     "type": "music",
+     "musicBrainzId": "",
+     "artists": [
+      {
+       "id": "3BCOoHVnn287SKIxXFdoZy",
+       "name": "Puscifer"
+      },
+      {
+       "id": "4mQzT1yKcR7uWb9aXe2LpD",
+       "name": "Carina Round"
+      }
+     ],
+     "displayArtist": "Puscifer feat. Carina Round"
+    },
+    {
+     "id": "1aB2cD3eF4gH5iJ6kL7mN8",
+     "parent": "0gYKsZXsT8KfWovtLmHqI4",
+     "isDir": false,
+     "title": "Alice by the Moon",
+     "album": "Alice by the Moon",
+     "artist": "The Checks",
+     "albumId": "0gYKsZXsT8KfWovtLmHqI4",
+     "artistId": "1TeigLa2FBy3jtyksTv2y6",
+     "type": "music"
+    }
+   ]
+  }
+ }
+}

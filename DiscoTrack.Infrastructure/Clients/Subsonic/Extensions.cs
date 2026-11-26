@@ -23,4 +23,19 @@ internal static class Extensions
 
 		return [];
 	}
+
+	public static IReadOnlyList<ArtistID3> Credits(this Child song)
+	{
+		if (song.Artists is { Count: > 0 })
+		{
+			return song.Artists;
+		}
+
+		if (song.ArtistId is not null && song.Artist is not null)
+		{
+			return [new ArtistID3 { Id = song.ArtistId, Name = song.Artist }];
+		}
+
+		return [];
+	}
 }

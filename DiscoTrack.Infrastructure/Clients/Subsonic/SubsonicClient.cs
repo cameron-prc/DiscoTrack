@@ -37,6 +37,22 @@ public class SubsonicClient(HttpClient http, IOptions<SubsonicOptions> options) 
 		return response.Artists?.Index ?? [];
 	}
 
+	public async Task<IReadOnlyList<Child>> Search3(string query, int songCount, int songOffset, CancellationToken ct)
+	{
+		var parameters = new Dictionary<string, string>
+		{
+			["query"] = query,
+			["songCount"] = songCount.ToString(),
+			["songOffset"] = songOffset.ToString(),
+			["artistCount"] = "0",
+			["albumCount"] = "0",
+		};
+
+		var response = await Get<Search3Response>(SubsonicRoutes.Search3, parameters, ct);
+
+		return response.SearchResult3?.Song ?? [];
+	}
+
 	private async Task<T> Get<T>(string method, IReadOnlyDictionary<string, string> query, CancellationToken ct) where T : SubsonicResponse
 	{
 		var envelope = await http.GetFromJsonAsync<SubsonicEnvelope<T>>(BuildUrl(method, query), Json, ct);

@@ -76,6 +76,55 @@ public class SubsonicClientTests
 	}
 
 	[Fact]
+	public async Task Search3_requests_songs_only_with_the_given_query_count_and_offset()
+	{
+		_http.WhenPathContains("search3", Fixtures.Read("subsonic/search3.json"));
+
+		await Client().Search3("\"\"", songCount: 500, songOffset: 1000, CancellationToken.None);
+
+		var query = HttpUtility.ParseQueryString(_http.Requests.Single().RequestUri!.Query);
+		Assert.Equal("\"\"", query["query"]);
+		Assert.Equal("500", query["songCount"]);
+		Assert.Equal("1000", query["songOffset"]);
+		Assert.Equal("0", query["artistCount"]);
+		Assert.Equal("0", query["albumCount"]);
+	}
+
+	[Fact]
+	public async Task Search3_returns_the_songs_as_deserialised()
+	{
+		_http.WhenPathContains("search3", Fixtures.Read("subsonic/search3.json"));
+
+		var songs = await Client().Search3("\"\"", 500, 0, CancellationToken.None);
+
+		Assert.Equal(["Third Eye", "Tiny Monsters", "Alice by the Moon"], songs.Select(song => song.Title));
+		var thirdEye = songs[0];
+		Assert.Equal("2kq1Fl3wNBhHfLcgSKBwVn", thirdEye.Id);
+		Assert.Equal("6NhcvrbascKsO9WepfYLYD", thirdEye.AlbumId);
+		Assert.Equal(1, thirdEye.Track);
+		Assert.Equal(1, thirdEye.DiscNumber);
+		Assert.Equal(854, thirdEye.Duration);
+		Assert.Equal("b3f1f1a4-6d55-4c5e-9d0e-6e0c2a3d9f10", thirdEye.MusicBrainzId);
+		Assert.Equal(["Puscifer", "Carina Round"], songs[1].Artists!.Select(artist => artist.Name));
+		var legacy = songs[2];
+		Assert.Null(legacy.Artists);
+		Assert.Null(legacy.Track);
+		Assert.Null(legacy.DiscNumber);
+		Assert.Null(legacy.Duration);
+		Assert.Equal("1TeigLa2FBy3jtyksTv2y6", legacy.ArtistId);
+	}
+
+	[Fact]
+	public async Task Search3_returns_empty_when_no_song_matches()
+	{
+		_http.WhenPathContains("search3", Fixtures.Read("subsonic/search3-empty.json"));
+
+		var songs = await Client().Search3("\"\"", 500, 0, CancellationToken.None);
+
+		Assert.Empty(songs);
+	}
+
+	[Fact]
 	public async Task Any_call_throws_with_the_server_message_when_status_is_failed()
 	{
 		_http.WhenPathContains("getArtists", Fixtures.Read("subsonic/error-auth.json"));

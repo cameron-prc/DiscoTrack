@@ -157,7 +157,9 @@ public class SubsonicLibrarySourceTests
 	{
 		public IReadOnlyList<AlbumID3> Albums { get; set; } = [];
 		public IReadOnlyList<IndexID3> Indexes { get; set; } = [];
+		public IReadOnlyList<Child> Songs { get; set; } = [];
 		public List<(int Size, int Offset)> AlbumRequests { get; } = [];
+		public List<(string Query, int Count, int Offset)> SongRequests { get; } = [];
 
 		public Task<IReadOnlyList<AlbumID3>> GetAlbumList2(AlbumListType type, int size, int offset, CancellationToken ct)
 		{
@@ -168,6 +170,12 @@ public class SubsonicLibrarySourceTests
 		public Task<IReadOnlyList<IndexID3>> GetArtists(CancellationToken ct)
 		{
 			return Task.FromResult(Indexes);
+		}
+
+		public Task<IReadOnlyList<Child>> Search3(string query, int songCount, int songOffset, CancellationToken ct)
+		{
+			SongRequests.Add((query, songCount, songOffset));
+			return Task.FromResult<IReadOnlyList<Child>>(Songs.Skip(songOffset).Take(songCount).ToList());
 		}
 	}
 }
