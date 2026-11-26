@@ -8,4 +8,5 @@ public record SyncAlbumWithDiscographyResponse(
 	IReadOnlyList<Artist> CreatedArtists,
 	IReadOnlyList<Artist> UpdatedArtists,
 	IReadOnlyList<Artist> LinkedArtists,
-	IReadOnlyList<Artist> UnlinkedArtists);
+	IReadOnlyList<Artist> UnlinkedArtists,
+	Album? AbsorbedAlbum);

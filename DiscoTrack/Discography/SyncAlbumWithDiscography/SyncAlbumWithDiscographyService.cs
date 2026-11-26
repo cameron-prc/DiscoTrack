@@ -12,12 +12,14 @@ public class SyncAlbumWithDiscographyService(IDiscographySource source, IDiscogr
 	{
 		Album? album;
 		IReadOnlyList<Artist> knownArtists;
+		IReadOnlyList<Album> knownAlbums;
 		DiscographyAlbum? discographyAlbum;
 
 		try
 		{
 			album = await catalogue.GetAlbum(albumId, cancellationToken);
 			knownArtists = await catalogue.GetArtists(cancellationToken);
+			knownAlbums = await catalogue.GetAlbums(cancellationToken);
 		}
 		catch (Exception exception) when (exception is not OperationCanceledException)
 		{
@@ -74,15 +76,20 @@ public class SyncAlbumWithDiscographyService(IDiscographySource source, IDiscogr
 				.Select(BuildArtist)
 				.Apply(artist => artist.ExternalIds.Apply(externalId => artistsLookup[externalId] = artist));
 
+		var absorbedAlbum = knownAlbums
+				.FirstOrDefault(knownAlbum => knownAlbum.Id != album.Id && knownAlbum.ExternalIds.Contains(discographyAlbum.ReleaseGroupId));
+
 		var syncedAlbum = new Album
 		{
 			Id = album.Id,
 			Title = discographyAlbum.Title,
 			Year = discographyAlbum.Year ?? album.Year,
 			IsCompilation = discographyAlbum.IsCompilation,
-			Tracked = album.Tracked,
+			Tracked = album.Tracked || absorbedAlbum is { Tracked: true },
 			ExternalIds = album.ExternalIds
+						.Concat(absorbedAlbum?.ExternalIds ?? [])
 						.Where(externalId => externalId.Provider != source.ReleaseGroupProvider)
+						.Distinct()
 						.Append(discographyAlbum.ReleaseGroupId)
 						.ToList(),
 			Artists = creditedArtists
@@ -118,7 +125,14 @@ public class SyncAlbumWithDiscographyService(IDiscographySource source, IDiscogr
 
 		try
 		{
-			await catalogue.SaveAlbum(syncedAlbum, cancellationToken);
+			if (absorbedAlbum is null)
+			{
+				await catalogue.SaveAlbum(syncedAlbum, cancellationToken);
+			}
+			else
+			{
+				await catalogue.MergeAlbums(syncedAlbum, absorbedAlbum.Id, cancellationToken);
+			}
 		}
 		catch (Exception exception) when (exception is not OperationCanceledException)
 		{
@@ -127,7 +141,7 @@ public class SyncAlbumWithDiscographyService(IDiscographySource source, IDiscogr
 			return new List<ISyncAlbumWithDiscographyError> { new UnableToSaveAlbumError(exception.Message) };
 		}
 
-		return new SyncAlbumWithDiscographyResponse(syncedAlbum, newArtists, updatedArtists, linkedArtists, unlinkedArtists);
+		return new SyncAlbumWithDiscographyResponse(syncedAlbum, newArtists, updatedArtists, linkedArtists, unlinkedArtists, absorbedAlbum);
 	}
 
 	private static Artist BuildArtist(DiscographyArtist discographyArtist)

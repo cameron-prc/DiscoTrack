@@ -29,6 +29,11 @@ public class SyncArtistWithDiscographyJobHandler(ISyncArtistWithDiscographyServi
 			response.CreatedAlbums.Count,
 			response.CreatedArtists.Count,
 			response.SkippedAlbums.Count);
+
+		if (response.AbsorbedArtist is not null)
+		{
+			logger.LogInformation("{AbsorbedArtist} held the same discography artist and was merged into {Artist}", response.AbsorbedArtist, response.Artist);
+		}
 	}
 
 	private void LogError(ArtistId artistId, ISyncArtistWithDiscographyError error)

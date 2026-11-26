@@ -22,6 +22,7 @@ public class SyncAlbumWithDiscographyServiceTests
 	private readonly List<string> _saves = [];
 	private readonly Artist _tool = new() { ExternalIds = [new SubsonicId("art-tool"), new MusicBrainzArtistId("mb-tool")], Name = "Tool" };
 	private readonly Album _album;
+	private readonly List<Album> _knownAlbums;
 
 	public SyncAlbumWithDiscographyServiceTests()
 	{
@@ -33,12 +34,17 @@ public class SyncAlbumWithDiscographyServiceTests
 			Artists = [new AlbumArtist { Artist = _tool, Position = 1 }],
 		};
 
+		_knownAlbums = [_album];
+
 		_source.SetupGet(source => source.ReleaseGroupProvider).Returns(Provider.MusicBrainzReleaseGroup);
 		_source.SetupGet(source => source.ArtistProvider).Returns(Provider.MusicBrainzArtist);
 		_resolver.Setup(resolver => resolver.Resolve(_album, It.IsAny<CancellationToken>())).ReturnsAsync(Discography(DiscographyTool));
 
 		_catalogue.Setup(catalogue => catalogue.GetAlbum(_album.Id, It.IsAny<CancellationToken>())).ReturnsAsync(_album);
 		_catalogue.Setup(catalogue => catalogue.GetArtists(It.IsAny<CancellationToken>())).ReturnsAsync([_tool]);
+		_catalogue.Setup(catalogue => catalogue.GetAlbums(It.IsAny<CancellationToken>())).ReturnsAsync(_knownAlbums);
+		_catalogue.Setup(catalogue => catalogue.MergeAlbums(It.IsAny<Album>(), It.IsAny<AlbumId>(), It.IsAny<CancellationToken>()))
+			.Callback(() => _saves.Add(nameof(ICatalogue.MergeAlbums)));
 		_catalogue.Setup(catalogue => catalogue.SaveArtist(It.IsAny<Artist>(), It.IsAny<CancellationToken>()))
 			.Callback(() => _saves.Add(nameof(ICatalogue.SaveArtist)));
 		_catalogue.Setup(catalogue => catalogue.SaveAlbum(It.IsAny<Album>(), It.IsAny<CancellationToken>()))
@@ -111,6 +117,64 @@ public class SyncAlbumWithDiscographyServiceTests
 		var result = await Sync().Run(_album.Id, CancellationToken.None);
 
 		Assert.Equal([new SubsonicId("alb-lateralus"), ReleaseId, ReleaseGroupId], result.GetRight.Album.ExternalIds);
+	}
+
+	[Fact]
+	public async Task Absorbs_another_album_holding_the_release_group_id_keeping_the_ids_of_both()
+	{
+		var otherEdition = new Album
+		{
+			ExternalIds = [new SubsonicId("alb-lateralus-vinyl"), new MusicBrainzReleaseId("rel-lateralus-vinyl"), ReleaseGroupId],
+			Title = "Lateralus",
+			Year = 2001,
+		};
+		_knownAlbums.Add(otherEdition);
+
+		var response = (await Sync().Run(_album.Id, CancellationToken.None)).GetRight;
+
+		Assert.Equal(_album.Id, response.Album.Id);
+		Assert.Same(otherEdition, response.AbsorbedAlbum);
+		Assert.Equal(
+			[new SubsonicId("alb-lateralus"), ReleaseId, new SubsonicId("alb-lateralus-vinyl"), new MusicBrainzReleaseId("rel-lateralus-vinyl"), ReleaseGroupId],
+			response.Album.ExternalIds);
+		_catalogue.Verify(catalogue => catalogue.MergeAlbums(response.Album, otherEdition.Id, It.IsAny<CancellationToken>()), Times.Once);
+		Assert.Equal([nameof(ICatalogue.MergeAlbums)], _saves);
+	}
+
+	[Theory]
+	[InlineData(true, false)]
+	[InlineData(false, true)]
+	public async Task Tracks_the_album_when_it_or_the_album_it_absorbs_is_tracked(bool tracked, bool absorbedTracked)
+	{
+		_album.Tracked = tracked;
+		_knownAlbums.Add(new Album { ExternalIds = [ReleaseGroupId], Title = "Lateralus", Year = 2001, Tracked = absorbedTracked });
+
+		var response = (await Sync().Run(_album.Id, CancellationToken.None)).GetRight;
+
+		Assert.True(response.Album.Tracked);
+	}
+
+	[Fact]
+	public async Task Absorbs_nothing_when_only_the_album_itself_holds_the_release_group_id()
+	{
+		_album.ExternalIds = [new SubsonicId("alb-lateralus"), ReleaseId, ReleaseGroupId];
+
+		var response = (await Sync().Run(_album.Id, CancellationToken.None)).GetRight;
+
+		Assert.Null(response.AbsorbedAlbum);
+		Assert.Equal([nameof(ICatalogue.SaveAlbum)], _saves);
+	}
+
+	[Fact]
+	public async Task Returns_an_error_when_absorbing_an_album_fails()
+	{
+		_knownAlbums.Add(new Album { ExternalIds = [ReleaseGroupId], Title = "Lateralus", Year = 2001 });
+		_catalogue.Setup(catalogue => catalogue.MergeAlbums(It.IsAny<Album>(), It.IsAny<AlbumId>(), It.IsAny<CancellationToken>()))
+			.ThrowsAsync(new InvalidOperationException("database is locked"));
+
+		var result = await Sync().Run(_album.Id, CancellationToken.None);
+
+		Assert.Equal(new UnableToSaveAlbumError("database is locked"), Assert.Single(result.GetLeft));
 	}
 
 	[Fact]

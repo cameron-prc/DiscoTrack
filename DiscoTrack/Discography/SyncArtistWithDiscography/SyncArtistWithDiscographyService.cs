@@ -36,6 +36,7 @@ public class SyncArtistWithDiscographyService(
 		{
 			artist = await catalogue.GetArtist(artistId, cancellationToken);
 			artistAlbums = await catalogue.GetArtistAlbums(artistId, cancellationToken);
+			knownArtists = await catalogue.GetArtists(cancellationToken);
 		}
 		catch (Exception exception) when (exception is not OperationCanceledException)
 		{
@@ -61,14 +62,25 @@ public class SyncArtistWithDiscographyService(
 			return new List<ISyncArtistWithDiscographyError> { new UnableToFindDiscographyArtistError() };
 		}
 
-		if (!artist.ExternalIds.Contains(discographyArtist.Id) || artist.Name != discographyArtist.Name)
+		var absorbedArtist = knownArtists
+				.FirstOrDefault(knownArtist => knownArtist.Id != artist.Id && knownArtist.ExternalIds.Contains(discographyArtist.Id));
+
+		if (absorbedArtist is not null || !artist.ExternalIds.Contains(discographyArtist.Id) || artist.Name != discographyArtist.Name)
 		{
 			artist.SetExternalId(discographyArtist.Id);
+			artist.SetExternalIds(artist.ExternalIds.Concat(absorbedArtist?.ExternalIds ?? []).Distinct().ToList());
 			artist.Name = discographyArtist.Name;
 
 			try
 			{
-				await catalogue.SaveArtist(artist, cancellationToken);
+				if (absorbedArtist is null)
+				{
+					await catalogue.SaveArtist(artist, cancellationToken);
+				}
+				else
+				{
+					await catalogue.MergeArtists(artist, absorbedArtist.Id, cancellationToken);
+				}
 			}
 			catch (Exception exception) when (exception is not OperationCanceledException)
 			{
@@ -80,9 +92,15 @@ public class SyncArtistWithDiscographyService(
 
 		var syncedAlbums = new List<Album>();
 		var unsyncedAlbums = new List<Album>();
+		var absorbedAlbumIds = new HashSet<AlbumId>();
 
 		foreach (var album in artistAlbums)
 		{
+			if (absorbedAlbumIds.Contains(album.Id))
+			{
+				continue;
+			}
+
 			var result = await syncAlbumWithDiscography.Run(album.Id, cancellationToken);
 
 			if (result.IsLeft)
@@ -93,6 +111,12 @@ public class SyncArtistWithDiscographyService(
 			else
 			{
 				syncedAlbums.Add(result.GetRight.Album);
+
+				if (result.GetRight.AbsorbedAlbum is { } absorbedAlbum)
+				{
+					absorbedAlbumIds.Add(absorbedAlbum.Id);
+					syncedAlbums.RemoveAll(syncedAlbum => syncedAlbum.Id == absorbedAlbum.Id);
+				}
 			}
 		}
 
@@ -182,7 +206,7 @@ public class SyncArtistWithDiscographyService(
 			return new List<ISyncArtistWithDiscographyError> { new UnableToSaveAlbumError(exception.Message) };
 		}
 
-		return new SyncArtistWithDiscographyResponse(artist, syncedAlbums, unsyncedAlbums, newAlbums, newArtists, skippedAlbums);
+		return new SyncArtistWithDiscographyResponse(artist, syncedAlbums, unsyncedAlbums, newAlbums, newArtists, skippedAlbums, absorbedArtist);
 	}
 
 	private static Artist BuildArtist(DiscographyArtist discographyArtist)

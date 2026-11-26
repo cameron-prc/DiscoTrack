@@ -24,7 +24,7 @@ public class SyncArtistWithDiscographyJobHandlerTests
 		using var cts = new CancellationTokenSource();
 		var artist = new Artist { Id = _artistId, Name = "Tool" };
 		_sync.Setup(sync => sync.Run(_artistId, cts.Token))
-			.ReturnsAsync(new SyncArtistWithDiscographyResponse(artist, [], [], [], [], []));
+			.ReturnsAsync(new SyncArtistWithDiscographyResponse(artist, [], [], [], [], [], null));
 
 		await Handler().Execute(_artistId, cts.Token);
 

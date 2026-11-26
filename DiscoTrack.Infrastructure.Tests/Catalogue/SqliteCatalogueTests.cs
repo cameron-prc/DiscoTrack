@@ -428,6 +428,67 @@ public sealed class SqliteCatalogueTests : IDisposable
 		Assert.Equal([new SubsonicId("alb-l"), new SubsonicId("alb-s")], albums.SelectMany(a => a.ExternalIds));
 	}
 
+	[Fact]
+	public async Task MergeAlbums_deletes_the_absorbed_album_and_saves_the_survivor_with_its_ids()
+	{
+		var tool = Artist("art-tool", "Tool");
+		var owned = Album("alb-l", "Lateralus (Remaster)", 2019, Credit(tool, 1));
+		var untracked = new Album { ExternalIds = [new MusicBrainzReleaseGroupId("rg-l")], Title = "Lateralus", Year = 2001, Artists = [Credit(tool, 1)] };
+		await SaveArtists(tool);
+		await SaveAlbums(owned, untracked);
+
+		owned.Title = "Lateralus";
+		owned.ExternalIds = [new SubsonicId("alb-l"), new MusicBrainzReleaseGroupId("rg-l")];
+		await _catalogue.MergeAlbums(owned, untracked.Id, CancellationToken.None);
+
+		var album = Assert.Single(await _catalogue.GetAlbums(CancellationToken.None));
+		Assert.Equal(owned.Id, album.Id);
+		Assert.Equal("Lateralus", album.Title);
+		Assert.Equal([new SubsonicId("alb-l"), new MusicBrainzReleaseGroupId("rg-l")], album.ExternalIds.OrderByDescending(id => id.Provider == Provider.Subsonic));
+		Assert.Equal(tool.Id, Assert.Single(album.Artists).Artist.Id);
+	}
+
+	[Fact]
+	public async Task MergeArtists_moves_the_absorbed_artists_credits_and_ids_to_the_survivor()
+	{
+		var library = Artist("art-tool", "TOOL");
+		var credited = new Artist { ExternalIds = [new MusicBrainzArtistId("mb-tool")], Name = "Tool" };
+		var puscifer = Artist("art-puscifer", "Puscifer");
+		await SaveArtists(library, credited, puscifer);
+		await SaveAlbums(
+			Album("alb-l", "Lateralus", 2001, Credit(library, 1)),
+			Album("alb-u", "Undertow", 1993, Credit(puscifer, 1), Credit(credited, 2)),
+			Album("alb-s", "Salival", 2000, Credit(library, 1), Credit(credited, 2)));
+
+		library.Name = "Tool";
+		library.ExternalIds = [new SubsonicId("art-tool"), new MusicBrainzArtistId("mb-tool")];
+		await _catalogue.MergeArtists(library, credited.Id, CancellationToken.None);
+
+		var artists = await _catalogue.GetArtists(CancellationToken.None);
+		Assert.Equal([puscifer.Id, library.Id], artists.Select(a => a.Id));
+		Assert.Equal(2, artists[1].ExternalIds.Count);
+		Assert.Contains(new MusicBrainzArtistId("mb-tool"), artists[1].ExternalIds);
+
+		var albums = await _catalogue.GetArtistAlbums(library.Id, CancellationToken.None);
+		Assert.Equal(["Lateralus", "Salival", "Undertow"], albums.Select(a => a.Title));
+		Assert.Equal([library.Id], albums[1].Artists.Select(c => c.Artist.Id));
+		Assert.Equal([puscifer.Id, library.Id], albums[2].Artists.Select(c => c.Artist.Id));
+	}
+
+	[Fact]
+	public async Task MergeArtists_changes_nothing_when_an_external_id_belongs_to_a_third_artist()
+	{
+		var library = Artist("art-tool", "TOOL");
+		var credited = new Artist { ExternalIds = [new MusicBrainzArtistId("mb-tool")], Name = "Tool" };
+		var puscifer = Artist("art-puscifer", "Puscifer");
+		await SaveArtists(library, credited, puscifer);
+
+		library.ExternalIds = [new SubsonicId("art-puscifer")];
+		await Assert.ThrowsAsync<SqliteException>(() => _catalogue.MergeArtists(library, credited.Id, CancellationToken.None));
+
+		Assert.Equal(["Puscifer", "TOOL", "Tool"], (await _catalogue.GetArtists(CancellationToken.None)).Select(a => a.Name));
+	}
+
 	private async Task SaveArtists(params Artist[] artists)
 	{
 		foreach (var artist in artists)

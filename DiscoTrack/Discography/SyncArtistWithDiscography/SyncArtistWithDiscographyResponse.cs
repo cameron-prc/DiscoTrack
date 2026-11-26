@@ -9,4 +9,5 @@ public record SyncArtistWithDiscographyResponse(
 	IReadOnlyList<Album> UnsyncedAlbums,
 	IReadOnlyList<Album> CreatedAlbums,
 	IReadOnlyList<Artist> CreatedArtists,
-	IReadOnlyList<DiscographyAlbum> SkippedAlbums);
+	IReadOnlyList<DiscographyAlbum> SkippedAlbums,
+	Artist? AbsorbedArtist);

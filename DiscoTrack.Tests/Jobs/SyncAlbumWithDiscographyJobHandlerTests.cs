@@ -24,7 +24,7 @@ public class SyncAlbumWithDiscographyJobHandlerTests
 		using var cts = new CancellationTokenSource();
 		var album = new Album { Id = _albumId, Title = "Lateralus", Year = 2001 };
 		_sync.Setup(sync => sync.Run(_albumId, cts.Token))
-			.ReturnsAsync(new SyncAlbumWithDiscographyResponse(album, [], [], [], []));
+			.ReturnsAsync(new SyncAlbumWithDiscographyResponse(album, [], [], [], [], null));
 
 		await Handler().Execute(_albumId, cts.Token);
 

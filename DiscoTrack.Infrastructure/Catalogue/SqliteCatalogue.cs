@@ -106,6 +106,18 @@ public class SqliteCatalogue(IOptions<SqliteOptions> options) : ICatalogue
 
 	private const string InsertAlbumArtist = "INSERT INTO AlbumArtists (AlbumId, ArtistId, Position) VALUES (@AlbumId, @ArtistId, @Position)";
 
+	private const string MoveAlbumArtists = """
+		UPDATE AlbumArtists SET ArtistId = @Survivor
+		WHERE ArtistId = @Absorbed
+		  AND AlbumId NOT IN (SELECT AlbumId FROM AlbumArtists WHERE ArtistId = @Survivor)
+		""";
+
+	private const string DeleteArtistAlbumArtists = "DELETE FROM AlbumArtists WHERE ArtistId = @Absorbed";
+
+	private const string DeleteArtist = "DELETE FROM Artists WHERE Id = @Absorbed";
+
+	private const string DeleteAlbum = "DELETE FROM Albums WHERE Id = @Absorbed";
+
 	private readonly string _connectionString = options.Value.ConnectionString;
 
 	public async Task<IReadOnlyList<Artist>> GetArtists(CancellationToken ct)
@@ -246,6 +258,50 @@ public class SqliteCatalogue(IOptions<SqliteOptions> options) : ICatalogue
 		var externalIdDtos = album.ExternalIds.Select(externalId => externalId.ToDto(album.Id));
 		var albumArtistDtos = album.Artists.Select(albumArtist => albumArtist.ToDto(album.Id));
 
+		await connection.ExecuteAsync(UpsertAlbum, albumDto, transaction);
+		await connection.ExecuteAsync(DeleteAlbumExternalIds, albumDto, transaction);
+		await connection.ExecuteAsync(DeleteAlbumArtists, albumDto, transaction);
+		await connection.ExecuteAsync(InsertAlbumExternalId, externalIdDtos, transaction);
+		await connection.ExecuteAsync(InsertAlbumArtist, albumArtistDtos, transaction);
+
+		await transaction.CommitAsync(ct);
+	}
+
+	public async Task MergeArtists(Artist survivor, ArtistId absorbed, CancellationToken ct)
+	{
+		await using var connection = new SqliteConnection(_connectionString);
+		await connection.OpenAsync(ct);
+		await using var transaction = await connection.BeginTransactionAsync(ct);
+
+		var artistDto = survivor.ToDto();
+		var externalIdDtos = survivor.ExternalIds.Select(externalId => externalId.ToDto(survivor.Id));
+		var parameters = new { Survivor = survivor.Id, Absorbed = absorbed };
+
+		await connection.ExecuteAsync(UpsertArtist, artistDto, transaction);
+		await connection.ExecuteAsync(MoveAlbumArtists, parameters, transaction);
+		await connection.ExecuteAsync(DeleteArtistAlbumArtists, parameters, transaction);
+		await connection.ExecuteAsync(DeleteArtistExternalIds, new { Id = absorbed }, transaction);
+		await connection.ExecuteAsync(DeleteArtist, parameters, transaction);
+		await connection.ExecuteAsync(DeleteArtistExternalIds, artistDto, transaction);
+		await connection.ExecuteAsync(InsertArtistExternalId, externalIdDtos, transaction);
+
+		await transaction.CommitAsync(ct);
+	}
+
+	public async Task MergeAlbums(Album survivor, AlbumId absorbed, CancellationToken ct)
+	{
+		await using var connection = new SqliteConnection(_connectionString);
+		await connection.OpenAsync(ct);
+		await using var transaction = await connection.BeginTransactionAsync(ct);
+
+		var albumDto = survivor.ToDto();
+		var externalIdDtos = survivor.ExternalIds.Select(externalId => externalId.ToDto(survivor.Id));
+		var albumArtistDtos = survivor.Artists.Select(albumArtist => albumArtist.ToDto(survivor.Id));
+		var parameters = new { Absorbed = absorbed };
+
+		await connection.ExecuteAsync(DeleteAlbumExternalIds, new { Id = absorbed }, transaction);
+		await connection.ExecuteAsync(DeleteAlbumArtists, new { Id = absorbed }, transaction);
+		await connection.ExecuteAsync(DeleteAlbum, parameters, transaction);
 		await connection.ExecuteAsync(UpsertAlbum, albumDto, transaction);
 		await connection.ExecuteAsync(DeleteAlbumExternalIds, albumDto, transaction);
 		await connection.ExecuteAsync(DeleteAlbumArtists, albumDto, transaction);

@@ -51,7 +51,7 @@ public class SyncArtistWithDiscographyServiceTests
 		_resolver.Setup(resolver => resolver.Resolve(_tool, _artistAlbums, It.IsAny<CancellationToken>())).ReturnsAsync(DiscographyTool);
 		_syncAlbum.Setup(syncAlbum => syncAlbum.Run(It.IsAny<AlbumId>(), It.IsAny<CancellationToken>()))
 			.Callback(() => _calls.Add(nameof(AlbumSync.ISyncAlbumWithDiscographyService.Run)))
-			.ReturnsAsync((AlbumId albumId, CancellationToken _) => new AlbumSync.SyncAlbumWithDiscographyResponse(_artistAlbums.Single(album => album.Id == albumId), [], [], [], []));
+			.ReturnsAsync((AlbumId albumId, CancellationToken _) => new AlbumSync.SyncAlbumWithDiscographyResponse(_artistAlbums.Single(album => album.Id == albumId), [], [], [], [], null));
 
 		_catalogue.Setup(catalogue => catalogue.GetArtist(_tool.Id, It.IsAny<CancellationToken>())).ReturnsAsync(_tool);
 		_catalogue.Setup(catalogue => catalogue.GetArtistAlbums(_tool.Id, It.IsAny<CancellationToken>())).ReturnsAsync(_artistAlbums);
@@ -105,6 +105,62 @@ public class SyncArtistWithDiscographyServiceTests
 
 		Assert.Equal("Tool", result.GetRight.Artist.Name);
 		_catalogue.Verify(catalogue => catalogue.SaveArtist(_tool, It.IsAny<CancellationToken>()), Times.Once);
+	}
+
+	[Fact]
+	public async Task Absorbs_another_artist_holding_the_discography_artist_id_keeping_the_ids_of_both()
+	{
+		var duplicate = new Artist { ExternalIds = [ToolId, new SubsonicId("art-tool-2")], Name = "Tool" };
+		_knownArtists.Add(duplicate);
+		_catalogue.Setup(catalogue => catalogue.MergeArtists(_tool, duplicate.Id, It.IsAny<CancellationToken>()))
+			.Callback(() => _knownArtists.Remove(duplicate));
+
+		var response = (await Run()).GetRight;
+
+		Assert.Same(duplicate, response.AbsorbedArtist);
+		Assert.Equal([new SubsonicId("art-tool"), ToolId, new SubsonicId("art-tool-2")], response.Artist.ExternalIds);
+		Assert.Equal("Tool", response.Artist.Name);
+		_catalogue.Verify(catalogue => catalogue.MergeArtists(_tool, duplicate.Id, It.IsAny<CancellationToken>()), Times.Once);
+		_catalogue.Verify(catalogue => catalogue.SaveArtist(It.IsAny<Artist>(), It.IsAny<CancellationToken>()), Times.Never);
+	}
+
+	[Fact]
+	public async Task Returns_an_error_when_absorbing_an_artist_fails()
+	{
+		var duplicate = new Artist { ExternalIds = [ToolId], Name = "Tool" };
+		_knownArtists.Add(duplicate);
+		_catalogue.Setup(catalogue => catalogue.MergeArtists(_tool, duplicate.Id, It.IsAny<CancellationToken>())).ThrowsAsync(new InvalidOperationException("database is locked"));
+
+		Assert.Equal(new UnableToSaveArtistError("database is locked"), Assert.Single((await Run()).GetLeft));
+		_syncAlbum.Verify(syncAlbum => syncAlbum.Run(It.IsAny<AlbumId>(), It.IsAny<CancellationToken>()), Times.Never);
+	}
+
+	[Fact]
+	public async Task Does_not_sync_or_report_an_album_another_of_the_artists_albums_absorbed()
+	{
+		var remaster = new Album { Title = "Lateralus (Remaster)", Year = 2019, Artists = [new AlbumArtist { Artist = _tool, Position = 1 }] };
+		_artistAlbums.Insert(0, remaster);
+		_syncAlbum.Setup(syncAlbum => syncAlbum.Run(remaster.Id, It.IsAny<CancellationToken>()))
+			.ReturnsAsync(new AlbumSync.SyncAlbumWithDiscographyResponse(remaster, [], [], [], [], _lateralus));
+
+		var response = (await Run()).GetRight;
+
+		Assert.Equal([remaster], response.SyncedAlbums);
+		Assert.Empty(response.UnsyncedAlbums);
+		_syncAlbum.Verify(syncAlbum => syncAlbum.Run(_lateralus.Id, It.IsAny<CancellationToken>()), Times.Never);
+	}
+
+	[Fact]
+	public async Task Does_not_report_as_synced_an_album_a_later_album_absorbed()
+	{
+		var remaster = new Album { Title = "Lateralus (Remaster)", Year = 2019, Artists = [new AlbumArtist { Artist = _tool, Position = 1 }] };
+		_artistAlbums.Add(remaster);
+		_syncAlbum.Setup(syncAlbum => syncAlbum.Run(remaster.Id, It.IsAny<CancellationToken>()))
+			.ReturnsAsync(new AlbumSync.SyncAlbumWithDiscographyResponse(remaster, [], [], [], [], _lateralus));
+
+		var response = (await Run()).GetRight;
+
+		Assert.Equal([remaster], response.SyncedAlbums);
 	}
 
 	[Fact]

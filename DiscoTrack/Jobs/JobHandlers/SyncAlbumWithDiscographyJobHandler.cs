@@ -28,6 +28,11 @@ public class SyncAlbumWithDiscographyJobHandler(ISyncAlbumWithDiscographyService
 			response.UpdatedArtists.Count,
 			response.LinkedArtists.Count,
 			response.UnlinkedArtists.Count);
+
+		if (response.AbsorbedAlbum is not null)
+		{
+			logger.LogInformation("{AbsorbedAlbum} held the same discography album and was merged into {Album}", response.AbsorbedAlbum, response.Album);
+		}
 	}
 
 	private void LogError(AlbumId albumId, ISyncAlbumWithDiscographyError error)
