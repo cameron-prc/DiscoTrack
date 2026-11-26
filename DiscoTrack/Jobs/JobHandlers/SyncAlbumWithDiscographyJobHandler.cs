@@ -30,6 +30,11 @@ public class SyncAlbumWithDiscographyJobHandler(ISyncAlbumWithDiscographyService
 			response.LinkedArtists.Count,
 			response.UnlinkedArtists.Count);
 
+		if (response.Tracks is not null)
+		{
+			logger.LogInformation("{Album} now has {TrackCount} tracks", response.Album, response.Tracks.Count);
+		}
+
 		if (response.AbsorbedAlbum is not null)
 		{
 			logger.LogInformation("{AbsorbedAlbum} held the same discography album and was merged into {Album}", response.AbsorbedAlbum, response.Album);

@@ -21,6 +21,7 @@ public class SyncAlbumWithDiscographyServiceTests
 	private readonly Mock<IDiscographySource> _source = new();
 	private readonly Mock<IDiscographyAlbumResolver> _resolver = new();
 	private readonly List<string> _saves = [];
+	private IReadOnlyList<Track> _savedTracks = [];
 	private readonly Artist _tool = new() { ExternalIds = [new SubsonicId("art-tool"), new MusicBrainzArtistId("mb-tool")], Name = "Tool", Disambiguation = "American rock band" };
 	private readonly Album _album;
 	private readonly List<Album> _knownAlbums;
@@ -39,6 +40,15 @@ public class SyncAlbumWithDiscographyServiceTests
 
 		_source.SetupGet(source => source.ReleaseGroupProvider).Returns(Provider.MusicBrainzReleaseGroup);
 		_source.SetupGet(source => source.ArtistProvider).Returns(Provider.MusicBrainzArtist);
+		_source.SetupGet(source => source.ReleaseProvider).Returns(Provider.MusicBrainzRelease);
+		_source.SetupGet(source => source.RecordingProvider).Returns(Provider.MusicBrainzRecording);
+		_source.Setup(source => source.GetAlbumTracks(It.IsAny<ExternalId>(), It.IsAny<CancellationToken>())).ReturnsAsync([]);
+		_catalogue.Setup(catalogue => catalogue.SaveAlbumTracks(It.IsAny<AlbumId>(), It.IsAny<IReadOnlyList<Track>>(), It.IsAny<CancellationToken>()))
+			.Callback((AlbumId _, IReadOnlyList<Track> tracks, CancellationToken _) =>
+			{
+				_saves.Add(nameof(ICatalogue.SaveAlbumTracks));
+				_savedTracks = tracks;
+			});
 		_resolver.Setup(resolver => resolver.Resolve(_album, It.IsAny<CancellationToken>())).ReturnsAsync(Discography(DiscographyTool));
 
 		_catalogue.Setup(catalogue => catalogue.GetAlbum(_album.Id, It.IsAny<CancellationToken>())).ReturnsAsync(_album);
@@ -457,6 +467,253 @@ public class SyncAlbumWithDiscographyServiceTests
 		var result = await Sync().Run(_album.Id, CancellationToken.None);
 
 		Assert.Equal(new UnableToSaveAlbumError("UNIQUE constraint failed"), Assert.Single(result.GetLeft));
+	}
+
+	[Fact]
+	public async Task Saves_the_tracks_that_came_with_a_tracked_albums_release_after_the_album_without_asking_again()
+	{
+		Tracklist(Listed(1, "The Grudge", "rec-grudge"), Listed(2, "Eon Blue Apocalypse", "rec-eon"));
+
+		var response = (await Sync().Run(_album.Id, CancellationToken.None)).GetRight;
+
+		Assert.Equal([nameof(ICatalogue.SaveAlbum), nameof(ICatalogue.SaveAlbumTracks)], _saves);
+		Assert.Equal(["The Grudge", "Eon Blue Apocalypse"], _savedTracks.Select(track => track.Title));
+		Assert.Same(_savedTracks, response.Tracks);
+		var grudge = _savedTracks[0];
+		Assert.Equal(_album.Id, grudge.AlbumId);
+		Assert.Equal((1, 1, 1000), (grudge.DiscNumber, grudge.Position, grudge.DurationMs));
+		Assert.Equal([new MusicBrainzRecordingId("rec-grudge")], grudge.ExternalIds);
+		Assert.Same(_tool, Assert.Single(grudge.Artists).Artist);
+		_source.Verify(source => source.GetAlbumTracks(It.IsAny<ExternalId>(), It.IsAny<CancellationToken>()), Times.Never);
+	}
+
+	[Fact]
+	public async Task Asks_for_the_release_groups_tracks_when_a_tracked_album_holds_no_release()
+	{
+		_album.Tracked = true;
+		_album.ExternalIds = [new SubsonicId("alb-lateralus")];
+		_source.Setup(source => source.GetAlbumTracks(ReleaseGroupId, It.IsAny<CancellationToken>())).ReturnsAsync([Listed(1, "The Grudge", "rec-grudge")]);
+
+		await Sync().Run(_album.Id, CancellationToken.None);
+
+		Assert.Equal("The Grudge", Assert.Single(_savedTracks).Title);
+	}
+
+	[Fact]
+	public async Task Takes_the_longest_tracklist_when_the_album_holds_several_releases()
+	{
+		var vinyl = new MusicBrainzReleaseId("rel-lateralus-vinyl");
+		_album.ExternalIds = [new SubsonicId("alb-lateralus"), ReleaseId, vinyl];
+		Tracklist(Listed(1, "The Grudge", "rec-grudge"));
+		_source.Setup(source => source.GetAlbumTracks(vinyl, It.IsAny<CancellationToken>()))
+			.ReturnsAsync([Listed(1, "The Grudge", "rec-grudge"), Listed(2, "Bonus", "rec-bonus")]);
+
+		await Sync().Run(_album.Id, CancellationToken.None);
+
+		Assert.Equal(["The Grudge", "Bonus"], _savedTracks.Select(track => track.Title));
+		_source.Verify(source => source.GetAlbumTracks(ReleaseId, It.IsAny<CancellationToken>()), Times.Never);
+	}
+
+	[Fact]
+	public async Task Leaves_the_tracks_of_an_untracked_album_alone()
+	{
+		_resolver.Setup(resolver => resolver.Resolve(_album, It.IsAny<CancellationToken>()))
+			.ReturnsAsync(Discography(DiscographyTool) with { Tracks = [Listed(1, "The Grudge", "rec-grudge")] });
+
+		var response = (await Sync().Run(_album.Id, CancellationToken.None)).GetRight;
+
+		Assert.Null(response.Tracks);
+		Assert.Equal([nameof(ICatalogue.SaveAlbum)], _saves);
+		_catalogue.Verify(catalogue => catalogue.GetAlbumTracks(It.IsAny<AlbumId>(), It.IsAny<CancellationToken>()), Times.Never);
+	}
+
+	[Fact]
+	public async Task Leaves_the_tracks_alone_when_the_discography_lists_none()
+	{
+		Tracklist();
+		KnownTracks(Owned(1, "The Grudge", "song-grudge"));
+
+		var response = (await Sync().Run(_album.Id, CancellationToken.None)).GetRight;
+
+		Assert.Null(response.Tracks);
+		Assert.Equal([nameof(ICatalogue.SaveAlbum)], _saves);
+	}
+
+	[Fact]
+	public async Task Gives_an_owned_track_at_the_same_place_the_recording_id_title_and_credits_and_keeps_its_library_id()
+	{
+		var puscifer = new Artist { ExternalIds = [new SubsonicId("art-puscifer")], Name = "Puscifer" };
+		var owned = Owned(1, "the grudge", "song-grudge");
+		owned.Artists = [new TrackArtist { Artist = puscifer, Position = 1 }];
+		owned.DurationMs = 515000;
+		KnownTracks(owned);
+		Tracklist(Listed(1, "The Grudge", "rec-grudge") with { LengthMs = null });
+
+		await Sync().Run(_album.Id, CancellationToken.None);
+
+		var track = Assert.Single(_savedTracks);
+		Assert.Same(owned, track);
+		Assert.Equal([new SubsonicId("song-grudge"), new MusicBrainzRecordingId("rec-grudge")], track.ExternalIds);
+		Assert.Equal("The Grudge", track.Title);
+		Assert.Equal(515000, track.DurationMs);
+		Assert.Same(_tool, Assert.Single(track.Artists).Artist);
+	}
+
+	[Fact]
+	public async Task Matches_a_track_by_recording_id_wherever_it_sits_and_moves_it_to_the_discography_place()
+	{
+		var owned = Owned(9, "Grudge (album version)", "song-grudge");
+		owned.ExternalIds = [new SubsonicId("song-grudge"), new MusicBrainzRecordingId("rec-grudge")];
+		KnownTracks(owned);
+		Tracklist(Listed(1, "The Grudge", "rec-grudge"));
+
+		await Sync().Run(_album.Id, CancellationToken.None);
+
+		var track = Assert.Single(_savedTracks);
+		Assert.Same(owned, track);
+		Assert.Equal(1, track.Position);
+	}
+
+	[Fact]
+	public async Task Replaces_a_different_recording_id_on_a_track_at_the_same_place()
+	{
+		var owned = Owned(1, "The Grudge", "song-grudge");
+		owned.ExternalIds = [new SubsonicId("song-grudge"), new MusicBrainzRecordingId("rec-grudge-merged-away")];
+		KnownTracks(owned);
+		Tracklist(Listed(1, "The Grudge", "rec-grudge"));
+
+		await Sync().Run(_album.Id, CancellationToken.None);
+
+		Assert.Equal([new SubsonicId("song-grudge"), new MusicBrainzRecordingId("rec-grudge")], Assert.Single(_savedTracks).ExternalIds);
+	}
+
+	[Fact]
+	public async Task Adds_the_tracks_the_album_is_missing_without_a_library_id()
+	{
+		KnownTracks(Owned(1, "The Grudge", "song-grudge"));
+		Tracklist(Listed(1, "The Grudge", "rec-grudge"), Listed(2, "Eon Blue Apocalypse", "rec-eon"));
+
+		await Sync().Run(_album.Id, CancellationToken.None);
+
+		Assert.Equal(2, _savedTracks.Count);
+		Assert.Equal([new MusicBrainzRecordingId("rec-eon")], _savedTracks[1].ExternalIds);
+	}
+
+	[Fact]
+	public async Task Keeps_an_unlisted_track_the_library_holds_and_drops_one_only_the_discography_knew()
+	{
+		var bonus = Owned(14, "Hidden Bonus", "song-bonus");
+		var stale = new Track { AlbumId = _album.Id, Title = "Wrongly Listed", DiscNumber = 1, Position = 15, ExternalIds = [new MusicBrainzRecordingId("rec-stale")] };
+		var orphan = new Track { AlbumId = _album.Id, Title = "Deleted File", DiscNumber = 1, Position = 16 };
+		KnownTracks(bonus, stale, orphan);
+		Tracklist(Listed(1, "The Grudge", "rec-grudge"));
+
+		await Sync().Run(_album.Id, CancellationToken.None);
+
+		Assert.Equal(["The Grudge", "Hidden Bonus"], _savedTracks.Select(track => track.Title));
+		Assert.Same(bonus, _savedTracks[1]);
+	}
+
+	[Fact]
+	public async Task Creates_an_artist_credited_only_on_a_track_untracked_and_saves_it_before_the_album()
+	{
+		Tracklist(Listed(1, "The Grudge", "rec-grudge", DiscographyTool, DiscographyPuscifer));
+
+		var response = (await Sync().Run(_album.Id, CancellationToken.None)).GetRight;
+
+		var created = Assert.Single(response.CreatedArtists);
+		Assert.Equal("Puscifer", created.Name);
+		Assert.False(created.Tracked);
+		Assert.Equal([_tool, created], _savedTracks[0].Artists.Select(credit => credit.Artist));
+		Assert.Equal([1, 2], _savedTracks[0].Artists.Select(credit => credit.Position));
+		Assert.Same(_tool, Assert.Single(response.Album.Artists).Artist);
+		Assert.Empty(response.LinkedArtists);
+		Assert.Equal([nameof(ICatalogue.SaveArtist), nameof(ICatalogue.SaveAlbum), nameof(ICatalogue.SaveAlbumTracks)], _saves);
+	}
+
+	[Fact]
+	public async Task Gives_the_discography_artist_id_to_a_track_artist_matching_by_name_instead_of_creating_one()
+	{
+		var puscifer = new Artist { ExternalIds = [new SubsonicId("art-puscifer")], Name = "PUSCIFER" };
+		var owned = Owned(1, "The Grudge", "song-grudge");
+		owned.Artists = [new TrackArtist { Artist = _tool, Position = 1 }, new TrackArtist { Artist = puscifer, Position = 2 }];
+		KnownTracks(owned);
+		_catalogue.Setup(catalogue => catalogue.GetArtists(It.IsAny<CancellationToken>())).ReturnsAsync([_tool, puscifer]);
+		Tracklist(Listed(1, "The Grudge", "rec-grudge", DiscographyTool, DiscographyPuscifer));
+
+		var response = (await Sync().Run(_album.Id, CancellationToken.None)).GetRight;
+
+		Assert.Empty(response.CreatedArtists);
+		Assert.Equal([puscifer], response.UpdatedArtists);
+		Assert.Equal([new SubsonicId("art-puscifer"), new MusicBrainzArtistId("mb-puscifer")], puscifer.ExternalIds);
+		Assert.Equal([_tool, puscifer], _savedTracks[0].Artists.Select(credit => credit.Artist));
+	}
+
+	[Fact]
+	public async Task Gives_the_merged_album_the_tracks_of_both_synced_with_the_discography()
+	{
+		var otherEdition = new Album { ExternalIds = [new SubsonicId("alb-lateralus-vinyl"), ReleaseGroupId], Title = "Lateralus", Year = 2001, Tracked = true };
+		_knownAlbums.Add(otherEdition);
+		KnownTracks(Owned(1, "The Grudge", "song-grudge"));
+		var vinylBonus = new Track { AlbumId = otherEdition.Id, Title = "Bonus", DiscNumber = 2, Position = 1, ExternalIds = [new SubsonicId("song-bonus")] };
+		_catalogue.Setup(catalogue => catalogue.GetAlbumTracks(otherEdition.Id, It.IsAny<CancellationToken>())).ReturnsAsync([vinylBonus]);
+		Tracklist(Listed(1, "The Grudge", "rec-grudge"), Listed(2, "Eon Blue Apocalypse", "rec-eon"));
+		IReadOnlyList<Track> merged = [];
+		_catalogue.Setup(catalogue => catalogue.MergeAlbums(It.IsAny<Album>(), It.IsAny<AlbumId>(), It.IsAny<IReadOnlyList<Track>>(), It.IsAny<CancellationToken>()))
+			.Callback((Album _, AlbumId _, IReadOnlyList<Track> tracks, CancellationToken _) => merged = tracks);
+
+		await Sync().Run(_album.Id, CancellationToken.None);
+
+		Assert.Equal(["The Grudge", "Eon Blue Apocalypse", "Bonus"], merged.Select(track => track.Title));
+		Assert.All(merged, track => Assert.Equal(_album.Id, track.AlbumId));
+		Assert.DoesNotContain(nameof(ICatalogue.SaveAlbumTracks), _saves);
+	}
+
+	[Fact]
+	public async Task Returns_an_error_when_the_discography_tracks_cannot_be_read()
+	{
+		_album.Tracked = true;
+		_album.ExternalIds = [new SubsonicId("alb-lateralus")];
+		_source.Setup(source => source.GetAlbumTracks(ReleaseGroupId, It.IsAny<CancellationToken>())).ThrowsAsync(new InvalidOperationException("rate limited"));
+
+		var result = await Sync().Run(_album.Id, CancellationToken.None);
+
+		Assert.Equal(new UnableToConnectToDiscographyError("rate limited"), Assert.Single(result.GetLeft));
+		Assert.Empty(_saves);
+	}
+
+	[Fact]
+	public async Task Returns_an_error_when_saving_the_tracks_fails()
+	{
+		Tracklist(Listed(1, "The Grudge", "rec-grudge"));
+		_catalogue.Setup(catalogue => catalogue.SaveAlbumTracks(It.IsAny<AlbumId>(), It.IsAny<IReadOnlyList<Track>>(), It.IsAny<CancellationToken>()))
+			.ThrowsAsync(new InvalidOperationException("database is locked"));
+
+		var result = await Sync().Run(_album.Id, CancellationToken.None);
+
+		Assert.Equal(new UnableToSaveAlbumError("database is locked"), Assert.Single(result.GetLeft));
+	}
+
+	private void Tracklist(params DiscographyTrack[] tracks)
+	{
+		_album.Tracked = true;
+		_resolver.Setup(resolver => resolver.Resolve(_album, It.IsAny<CancellationToken>()))
+			.ReturnsAsync(Discography(DiscographyTool) with { Tracks = tracks });
+	}
+
+	private void KnownTracks(params Track[] tracks)
+	{
+		_catalogue.Setup(catalogue => catalogue.GetAlbumTracks(_album.Id, It.IsAny<CancellationToken>())).ReturnsAsync(tracks);
+	}
+
+	private Track Owned(int position, string title, string subsonicId)
+	{
+		return new Track { AlbumId = _album.Id, Title = title, DiscNumber = 1, Position = position, ExternalIds = [new SubsonicId(subsonicId)] };
+	}
+
+	private static DiscographyTrack Listed(int position, string title, string recordingId, params DiscographyArtist[] artists)
+	{
+		return new DiscographyTrack(new MusicBrainzRecordingId(recordingId), title, 1, position, position * 1000, artists.Length == 0 ? [DiscographyTool] : artists);
 	}
 
 	[Fact]

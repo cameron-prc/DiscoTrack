@@ -6,14 +6,16 @@ namespace DiscoTrack.Tracks;
 
 public static class TrackMatching
 {
-	public static Track? FindMatch(this IReadOnlyList<Track> tracks, IReadOnlyList<ExternalId> externalIds, int discNumber, int position, string title)
+	// Two tracks at the same place holding different recordings are different tracks, unless anyRecording is set:
+	// a single release has one recording per place, so there the place is enough
+	public static Track? FindMatch(this IReadOnlyList<Track> tracks, IReadOnlyList<ExternalId> externalIds, int discNumber, int position, string title, bool anyRecording = false)
 	{
 		return tracks.FirstOrDefault(track => track.ExternalIds.Intersect(externalIds).Any())
 			?? tracks.FirstOrDefault(track =>
 				track.DiscNumber == discNumber
 				&& track.Position == position
 				&& MatchKey.For(track.Title) == MatchKey.For(title)
-				&& !(HoldsRecording(track.ExternalIds) && HoldsRecording(externalIds)));
+				&& (anyRecording || !(HoldsRecording(track.ExternalIds) && HoldsRecording(externalIds))));
 	}
 
 	public static IReadOnlyList<Track> MergeInto(this IReadOnlyList<Track> absorbedTracks, AlbumId albumId, IReadOnlyList<Track> albumTracks)
