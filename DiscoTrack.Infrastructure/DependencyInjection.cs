@@ -1,18 +1,18 @@
 using DiscoTrack.Catalogue;
+using DiscoTrack.Connections;
 using DiscoTrack.Discography;
 using DiscoTrack.Infrastructure.Catalogue;
 using DiscoTrack.Infrastructure.Clients.MusicBrainz;
 using DiscoTrack.Infrastructure.Clients.Spotify;
 using DiscoTrack.Infrastructure.Clients.Subsonic;
+using DiscoTrack.Infrastructure.Connections;
 using DiscoTrack.Infrastructure.Discography;
 using DiscoTrack.Infrastructure.Jobs;
 using DiscoTrack.Infrastructure.Library;
-using DiscoTrack.Infrastructure.Listening;
 using DiscoTrack.Infrastructure.Sqlite;
 using DiscoTrack.Infrastructure.Tokens;
 using DiscoTrack.Jobs;
 using DiscoTrack.Library;
-using DiscoTrack.Listening;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -83,7 +83,7 @@ public static class DependencyInjection
 		return services;
 	}
 
-	public static IServiceCollection AddSpotifyListening(this IServiceCollection services, IConfiguration configuration)
+	public static IServiceCollection AddSpotifyConnection(this IServiceCollection services, IConfiguration configuration)
 	{
 		services.AddOptions<SpotifyOptions>()
 			.Bind(configuration.GetSection(SpotifyOptions.Section));
@@ -91,9 +91,9 @@ public static class DependencyInjection
 		services.AddSingleton<IPendingAuthorisations, PendingAuthorisations>();
 		services.AddHttpClient<ISpotifyAccountsClient, SpotifyAccountsClient>((provider, http) =>
 			http.BaseAddress = new Uri(provider.GetRequiredService<IOptions<SpotifyOptions>>().Value.AccountsBaseUrl.TrimEnd('/') + "/"));
-		services.AddScoped<SpotifyConnection>();
-		services.AddScoped<IListeningConnection>(provider => provider.GetRequiredService<SpotifyConnection>());
-		services.AddScoped<ISpotifyAccessTokens>(provider => provider.GetRequiredService<SpotifyConnection>());
+		services.AddScoped<ISpotifyAccessTokens, SpotifyAccessTokens>();
+		services.AddTransient<SpotifyAuthorisationHandler>();
+		services.AddScoped<IProviderConnection, SpotifyConnection>();
 		return services;
 	}
 

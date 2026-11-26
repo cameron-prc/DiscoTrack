@@ -1,7 +1,7 @@
-using DiscoTrack.Infrastructure.Listening;
+using DiscoTrack.Infrastructure.Clients.Spotify;
 using Microsoft.Extensions.Time.Testing;
 
-namespace DiscoTrack.Infrastructure.Tests.Listening;
+namespace DiscoTrack.Infrastructure.Tests.Clients.Spotify;
 
 public class PendingAuthorisationsTests
 {

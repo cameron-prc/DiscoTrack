@@ -1,12 +1,12 @@
 using DiscoTrack.Common;
+using DiscoTrack.Connections;
 using DiscoTrack.Infrastructure.Clients.Spotify;
 using DiscoTrack.Infrastructure.Clients.Spotify.Responses;
 using DiscoTrack.Infrastructure.Tokens;
-using DiscoTrack.Listening;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace DiscoTrack.Infrastructure.Listening;
+namespace DiscoTrack.Infrastructure.Connections;
 
 public class SpotifyConnection(
 	ISpotifyAccountsClient client,
@@ -14,13 +14,12 @@ public class SpotifyConnection(
 	IPendingAuthorisations pendingAuthorisations,
 	IOptions<SpotifyOptions> options,
 	TimeProvider timeProvider,
-	ILogger<SpotifyConnection> logger) : IListeningConnection, ISpotifyAccessTokens
+	ILogger<SpotifyConnection> logger) : IProviderConnection
 {
-	public const string Provider = "Spotify";
+	private const string Provider = SpotifyAccessTokens.Provider;
 
-	private const string Scope = "user-read-recently-played";
-
-	private static readonly TimeSpan RefreshMargin = TimeSpan.FromMinutes(1);
+	// Every scope a feature built on this connection needs
+	private static readonly IReadOnlyList<string> Scopes = ["user-read-recently-played"];
 
 	private readonly SpotifyOptions _options = options.Value;
 
@@ -41,7 +40,7 @@ public class SpotifyConnection(
 			["client_id"] = _options.ClientId,
 			["response_type"] = "code",
 			["redirect_uri"] = _options.RedirectUri,
-			["scope"] = Scope,
+			["scope"] = string.Join(" ", Scopes),
 			["state"] = pendingAuthorisations.Start(),
 		};
 
@@ -49,16 +48,16 @@ public class SpotifyConnection(
 		return $"{_options.AccountsBaseUrl.TrimEnd('/')}/{SpotifyRoutes.Authorise}?{queryString}";
 	}
 
-	public async Task<Either<IList<IConnectListeningError>, ListeningConnected>> CompleteAuthorisation(string? code, string? state, string? error, CancellationToken ct)
+	public async Task<Either<IList<IConnectProviderError>, ProviderConnected>> CompleteAuthorisation(string? code, string? state, string? error, CancellationToken ct)
 	{
 		if (state is null || !pendingAuthorisations.Complete(state))
 		{
-			return new List<IConnectListeningError> { new AuthorisationNotStartedHereError() };
+			return new List<IConnectProviderError> { new AuthorisationNotStartedHereError() };
 		}
 
 		if (error is not null || string.IsNullOrEmpty(code))
 		{
-			return new List<IConnectListeningError> { new AuthorisationDeniedError(error ?? "Spotify sent no code") };
+			return new List<IConnectProviderError> { new AuthorisationDeniedError(error ?? "Spotify sent no code") };
 		}
 
 		TokenResponse response;
@@ -71,12 +70,12 @@ public class SpotifyConnection(
 		{
 			logger.LogWarning(exception, "Failed to exchange the Spotify authorisation code");
 
-			return new List<IConnectListeningError> { new UnableToExchangeCodeError(exception.Message) };
+			return new List<IConnectProviderError> { new UnableToExchangeCodeError(exception.Message) };
 		}
 
 		if (string.IsNullOrEmpty(response.RefreshToken))
 		{
-			return new List<IConnectListeningError> { new UnableToExchangeCodeError("Spotify sent no refresh token") };
+			return new List<IConnectProviderError> { new UnableToExchangeCodeError("Spotify sent no refresh token") };
 		}
 
 		var token = new ProviderToken(response.AccessToken, response.RefreshToken, timeProvider.GetUtcNow().AddSeconds(response.ExpiresIn));
@@ -89,35 +88,14 @@ public class SpotifyConnection(
 		{
 			logger.LogWarning(exception, "Failed to save the Spotify token");
 
-			return new List<IConnectListeningError> { new UnableToSaveTokenError(exception.Message) };
+			return new List<IConnectProviderError> { new UnableToSaveTokenError(exception.Message) };
 		}
 
-		return new ListeningConnected(token.ExpiresAt);
+		return new ProviderConnected(token.ExpiresAt);
 	}
 
 	public Task Disconnect(CancellationToken ct)
 	{
 		return tokenStore.Delete(Provider, ct);
-	}
-
-	public async Task<string> GetAccessToken(CancellationToken ct)
-	{
-		var token = await tokenStore.Get(Provider, ct)
-			?? throw new SpotifyException("Spotify is not connected.");
-
-		if (token.ExpiresAt > timeProvider.GetUtcNow() + RefreshMargin)
-		{
-			return token.AccessToken;
-		}
-
-		var response = await client.RefreshToken(token.RefreshToken, ct);
-		var refreshed = new ProviderToken(
-			response.AccessToken,
-			string.IsNullOrEmpty(response.RefreshToken) ? token.RefreshToken : response.RefreshToken,
-			timeProvider.GetUtcNow().AddSeconds(response.ExpiresIn));
-
-		await tokenStore.Save(Provider, refreshed, ct);
-
-		return refreshed.AccessToken;
 	}
 }

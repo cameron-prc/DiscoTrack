@@ -2,7 +2,7 @@ using DiscoTrack;
 using DiscoTrack.Infrastructure;
 using DiscoTrack.Infrastructure.Sqlite;
 using DiscoTrack.Infrastructure.Sqlite.Migrations;
-using DiscoTrack.Listening;
+using DiscoTrack.Connections;
 using DiscoTrack.Web.Components;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -17,7 +17,7 @@ builder.Services
 	.AddSubsonicLibrarySource(builder.Configuration)
 	.AddMusicBrainzDiscographySource(builder.Configuration)
 	.AddProviderTokens(builder.Configuration)
-	.AddSpotifyListening(builder.Configuration)
+	.AddSpotifyConnection(builder.Configuration)
 	.AddJobs()
 	.AddInMemoryJobQueue()
 	.AddJobBackgroundService();
@@ -34,7 +34,7 @@ if (!app.Environment.IsDevelopment())
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 app.UseAntiforgery();
 
-app.MapGet("/oauth/spotify/callback", async (string? code, string? state, string? error, IListeningConnection connection, CancellationToken ct) =>
+app.MapGet("/oauth/spotify/callback", async (string? code, string? state, string? error, IProviderConnection connection, CancellationToken ct) =>
 {
 	var result = await connection.CompleteAuthorisation(code, state, error, ct);
 

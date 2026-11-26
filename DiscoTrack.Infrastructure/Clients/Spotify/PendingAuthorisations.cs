@@ -1,6 +1,6 @@
 using System.Security.Cryptography;
 
-namespace DiscoTrack.Infrastructure.Listening;
+namespace DiscoTrack.Infrastructure.Clients.Spotify;
 
 public class PendingAuthorisations(TimeProvider timeProvider) : IPendingAuthorisations
 {

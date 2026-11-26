@@ -1,4 +1,4 @@
-namespace DiscoTrack.Infrastructure.Listening;
+namespace DiscoTrack.Infrastructure.Clients.Spotify;
 
 public interface IPendingAuthorisations
 {

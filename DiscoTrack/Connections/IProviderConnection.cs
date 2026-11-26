@@ -1,8 +1,9 @@
 using DiscoTrack.Common;
 
-namespace DiscoTrack.Listening;
+namespace DiscoTrack.Connections;
 
-public interface IListeningConnection
+// An account with an outside provider that the app acts on behalf of
+public interface IProviderConnection
 {
 	bool IsConfigured { get; }
 
@@ -12,7 +13,7 @@ public interface IListeningConnection
 	string StartAuthorisation();
 
 	/// <summary>Finishes the authorisation with the values the provider sent back to the redirect address.</summary>
-	Task<Either<IList<IConnectListeningError>, ListeningConnected>> CompleteAuthorisation(string? code, string? state, string? error, CancellationToken ct);
+	Task<Either<IList<IConnectProviderError>, ProviderConnected>> CompleteAuthorisation(string? code, string? state, string? error, CancellationToken ct);
 
 	Task Disconnect(CancellationToken ct);
 }
