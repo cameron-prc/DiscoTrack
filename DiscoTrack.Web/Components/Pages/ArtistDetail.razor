@@ -26,6 +26,7 @@ else
 			<li>@externalId.Provider: @externalId.Value</li>
 		}
 	</ul>
+	<button @onclick="ToggleTracked">@(_artist.Tracked ? "Untrack" : "Track")</button>
 	<button @onclick="SyncDiscography">Sync with discography</button>
 	@if (_syncQueued)
 	{
@@ -71,6 +72,12 @@ else
 			_albums = await Catalogue.GetArtistAlbums(artistId, CancellationToken.None);
 		}
 		_loading = false;
+	}
+
+	private async Task ToggleTracked()
+	{
+		_artist!.Tracked = !_artist.Tracked;
+		await Catalogue.SaveArtist(_artist, CancellationToken.None);
 	}
 
 	private async Task SyncDiscography()
