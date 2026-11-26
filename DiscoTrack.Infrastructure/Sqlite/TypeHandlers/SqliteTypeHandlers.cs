@@ -10,5 +10,6 @@ internal static class SqliteTypeHandlers
 	{
 		SqlMapper.AddTypeHandler(new ArtistIdHandler());
 		SqlMapper.AddTypeHandler(new AlbumIdHandler());
+		SqlMapper.AddTypeHandler(new TrackIdHandler());
 	}
 }

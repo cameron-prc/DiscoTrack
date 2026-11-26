@@ -1,6 +1,7 @@
 using DiscoTrack.Albums;
 using DiscoTrack.Artists;
 using DiscoTrack.Catalogue;
+using DiscoTrack.Tracks;
 
 namespace DiscoTrack.Tests.Library;
 
@@ -8,6 +9,7 @@ internal sealed class FakeCatalogue : ICatalogue
 {
 	public List<Artist> Artists { get; } = [];
 	public List<Album> Albums { get; } = [];
+	public Dictionary<AlbumId, IReadOnlyList<Track>> Tracks { get; } = [];
 	public List<string> Calls { get; } = [];
 	public string? FailingMethod { get; set; }
 
@@ -64,6 +66,19 @@ internal sealed class FakeCatalogue : ICatalogue
 		{
 			Albums.Add(album);
 		}
+		return Task.CompletedTask;
+	}
+
+	public Task<IReadOnlyList<Track>> GetAlbumTracks(AlbumId albumId, CancellationToken ct)
+	{
+		Record(nameof(GetAlbumTracks));
+		return Task.FromResult(Tracks.GetValueOrDefault(albumId, []));
+	}
+
+	public Task SaveAlbumTracks(AlbumId albumId, IReadOnlyList<Track> tracks, CancellationToken ct)
+	{
+		Record(nameof(SaveAlbumTracks));
+		Tracks[albumId] = tracks;
 		return Task.CompletedTask;
 	}
 

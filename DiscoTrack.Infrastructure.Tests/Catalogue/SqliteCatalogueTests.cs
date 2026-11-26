@@ -5,6 +5,7 @@ using DiscoTrack.Infrastructure.Catalogue;
 using DiscoTrack.Infrastructure.Sqlite;
 using DiscoTrack.Infrastructure.Sqlite.Migrations;
 using DiscoTrack.Infrastructure.Tests.Sqlite;
+using DiscoTrack.Tracks;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Options;
 
@@ -580,6 +581,131 @@ public sealed class SqliteCatalogueTests : IDisposable
 		Assert.Equal(["Puscifer", "TOOL", "Tool"], (await _catalogue.GetArtists(CancellationToken.None)).Select(a => a.Name));
 	}
 
+	[Fact]
+	public async Task GetAlbumTracks_is_empty_for_an_album_without_tracks()
+	{
+		var lateralus = Album("alb-l", "Lateralus", 2001);
+		await SaveAlbums(lateralus);
+
+		Assert.Empty(await _catalogue.GetAlbumTracks(lateralus.Id, CancellationToken.None));
+	}
+
+	[Fact]
+	public async Task SaveAlbumTracks_round_trips_tracks_in_disc_and_position_order_with_their_ids_and_credits()
+	{
+		var tool = Artist("art-tool", "Tool");
+		tool.Tracked = true;
+		var puscifer = Artist("art-puscifer", "Puscifer");
+		var lateralus = Album("alb-l", "Lateralus", 2001, Credit(tool, 1));
+		await SaveArtists(tool, puscifer);
+		await SaveAlbums(lateralus);
+		var schism = Track(lateralus, 1, 5, "Schism", TrackCredit(tool, 1), TrackCredit(puscifer, 2));
+		schism.ExternalIds = [new SubsonicId("song-schism"), new MusicBrainzRecordingId("rec-schism")];
+		schism.DurationMs = 403_000;
+		var theGrudge = Track(lateralus, 1, 1, "The Grudge", TrackCredit(tool, 1));
+		var bonus = Track(lateralus, 2, 1, "Bonus");
+
+		await _catalogue.SaveAlbumTracks(lateralus.Id, [schism, bonus, theGrudge], CancellationToken.None);
+
+		var tracks = await _catalogue.GetAlbumTracks(lateralus.Id, CancellationToken.None);
+		Assert.Equal([theGrudge.Id, schism.Id, bonus.Id], tracks.Select(t => t.Id));
+		Assert.All(tracks, t => Assert.Equal(lateralus.Id, t.AlbumId));
+		Assert.Equal("Schism", tracks[1].Title);
+		Assert.Equal(1, tracks[1].DiscNumber);
+		Assert.Equal(5, tracks[1].Position);
+		Assert.Equal(403_000, tracks[1].DurationMs);
+		Assert.Equal(2, tracks[1].ExternalIds.Count);
+		Assert.Contains(new SubsonicId("song-schism"), tracks[1].ExternalIds);
+		Assert.Contains(new MusicBrainzRecordingId("rec-schism"), tracks[1].ExternalIds);
+		Assert.Equal([1, 2], tracks[1].Artists.Select(c => c.Position));
+		Assert.Equal([tool.Id, puscifer.Id], tracks[1].Artists.Select(c => c.Artist.Id));
+		Assert.Equal([new SubsonicId("art-tool")], tracks[1].Artists[0].Artist.ExternalIds);
+		Assert.True(tracks[1].Artists[0].Artist.Tracked);
+		Assert.Null(tracks[0].DurationMs);
+		Assert.Empty(tracks[2].Artists);
+		Assert.Empty(tracks[2].ExternalIds);
+	}
+
+	[Fact]
+	public async Task SaveAlbumTracks_replaces_the_tracks_the_album_had()
+	{
+		var lateralus = Album("alb-l", "Lateralus", 2001);
+		await SaveAlbums(lateralus);
+		var theGrudge = Track(lateralus, 1, 1, "The Grudge");
+		theGrudge.ExternalIds = [new SubsonicId("song-grudge")];
+		await _catalogue.SaveAlbumTracks(lateralus.Id, [theGrudge, Track(lateralus, 1, 2, "Eon Blue Apocalypse")], CancellationToken.None);
+
+		theGrudge.Title = "The Grudge (Remaster)";
+		theGrudge.ExternalIds = [new MusicBrainzRecordingId("rec-grudge")];
+		await _catalogue.SaveAlbumTracks(lateralus.Id, [theGrudge], CancellationToken.None);
+
+		var track = Assert.Single(await _catalogue.GetAlbumTracks(lateralus.Id, CancellationToken.None));
+		Assert.Equal(theGrudge.Id, track.Id);
+		Assert.Equal("The Grudge (Remaster)", track.Title);
+		Assert.Equal([new MusicBrainzRecordingId("rec-grudge")], track.ExternalIds);
+	}
+
+	[Fact]
+	public async Task SaveAlbumTracks_leaves_the_tracks_of_other_albums_alone()
+	{
+		var lateralus = Album("alb-l", "Lateralus", 2001);
+		var salival = Album("alb-s", "Salival", 2000);
+		await SaveAlbums(lateralus, salival);
+		await _catalogue.SaveAlbumTracks(salival.Id, [Track(salival, 1, 1, "Third Eye")], CancellationToken.None);
+
+		await _catalogue.SaveAlbumTracks(lateralus.Id, [Track(lateralus, 1, 1, "The Grudge")], CancellationToken.None);
+		await _catalogue.SaveAlbumTracks(lateralus.Id, [], CancellationToken.None);
+
+		Assert.Empty(await _catalogue.GetAlbumTracks(lateralus.Id, CancellationToken.None));
+		Assert.Equal("Third Eye", Assert.Single(await _catalogue.GetAlbumTracks(salival.Id, CancellationToken.None)).Title);
+	}
+
+	[Fact]
+	public async Task SaveAlbumTracks_allows_the_same_recording_on_two_albums_and_a_repeated_position_within_one()
+	{
+		var lateralus = Album("alb-l", "Lateralus", 2001);
+		var salival = Album("alb-s", "Salival", 2000);
+		await SaveAlbums(lateralus, salival);
+		var studio = Track(lateralus, 1, 1, "Third Eye");
+		var alternate = Track(lateralus, 1, 1, "Third Eye (Alternate)");
+		var live = Track(salival, 1, 1, "Third Eye");
+		studio.ExternalIds = [new MusicBrainzRecordingId("rec-third-eye")];
+		live.ExternalIds = [new MusicBrainzRecordingId("rec-third-eye")];
+
+		await _catalogue.SaveAlbumTracks(lateralus.Id, [studio, alternate], CancellationToken.None);
+		await _catalogue.SaveAlbumTracks(salival.Id, [live], CancellationToken.None);
+
+		Assert.Equal(["Third Eye", "Third Eye (Alternate)"], (await _catalogue.GetAlbumTracks(lateralus.Id, CancellationToken.None)).Select(t => t.Title));
+		Assert.Equal([new MusicBrainzRecordingId("rec-third-eye")], Assert.Single(await _catalogue.GetAlbumTracks(salival.Id, CancellationToken.None)).ExternalIds);
+	}
+
+	[Fact]
+	public async Task SaveAlbumTracks_rejects_a_track_of_another_album_and_changes_nothing()
+	{
+		var lateralus = Album("alb-l", "Lateralus", 2001);
+		var salival = Album("alb-s", "Salival", 2000);
+		await SaveAlbums(lateralus, salival);
+		await _catalogue.SaveAlbumTracks(lateralus.Id, [Track(lateralus, 1, 1, "The Grudge")], CancellationToken.None);
+
+		await Assert.ThrowsAsync<ArgumentException>(
+			() => _catalogue.SaveAlbumTracks(lateralus.Id, [Track(salival, 1, 1, "Third Eye")], CancellationToken.None));
+
+		Assert.Equal("The Grudge", Assert.Single(await _catalogue.GetAlbumTracks(lateralus.Id, CancellationToken.None)).Title);
+	}
+
+	[Fact]
+	public async Task SaveAlbumTracks_changes_nothing_when_a_track_credits_an_artist_that_is_not_in_the_catalogue()
+	{
+		var lateralus = Album("alb-l", "Lateralus", 2001);
+		await SaveAlbums(lateralus);
+		await _catalogue.SaveAlbumTracks(lateralus.Id, [Track(lateralus, 1, 1, "The Grudge")], CancellationToken.None);
+
+		await Assert.ThrowsAsync<SqliteException>(
+			() => _catalogue.SaveAlbumTracks(lateralus.Id, [Track(lateralus, 1, 1, "Schism", TrackCredit(Artist("art-tool", "Tool"), 1))], CancellationToken.None));
+
+		Assert.Equal("The Grudge", Assert.Single(await _catalogue.GetAlbumTracks(lateralus.Id, CancellationToken.None)).Title);
+	}
+
 	private async Task SaveArtists(params Artist[] artists)
 	{
 		foreach (var artist in artists)
@@ -604,6 +730,16 @@ public sealed class SqliteCatalogueTests : IDisposable
 	private static AlbumArtist Credit(Artist artist, int position)
 	{
 		return new AlbumArtist { Artist = artist, Position = position };
+	}
+
+	private static TrackArtist TrackCredit(Artist artist, int position)
+	{
+		return new TrackArtist { Artist = artist, Position = position };
+	}
+
+	private static Track Track(Album album, int discNumber, int position, string title, params TrackArtist[] credits)
+	{
+		return new Track { AlbumId = album.Id, DiscNumber = discNumber, Position = position, Title = title, Artists = credits };
 	}
 
 	private static Album Album(string subsonicId, string title, int year, params AlbumArtist[] credits)

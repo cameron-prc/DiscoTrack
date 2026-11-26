@@ -4,6 +4,7 @@ using DiscoTrack.Artists;
 using DiscoTrack.Catalogue;
 using DiscoTrack.Infrastructure.Catalogue.Dtos;
 using DiscoTrack.Infrastructure.Sqlite;
+using DiscoTrack.Tracks;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Options;
 
@@ -143,6 +144,56 @@ public class SqliteCatalogue(IOptions<SqliteOptions> options) : ICatalogue
 
 	private const string InsertArtistScan = "INSERT INTO ArtistScans (ArtistId, Provider, ScannedAt) VALUES (@ArtistId, @Provider, @ScannedAt)";
 
+	private const string SelectAlbumTracks = """
+		SELECT t.Id, t.AlbumId, t.Title, t.DiscNumber, t.Position, t.DurationMs,
+			ta.Position AS CreditPosition, ar.Id AS ArtistId, ar.Name, ar.Tracked
+		FROM Tracks t
+		LEFT JOIN TrackArtists ta ON ta.TrackId = t.Id
+		LEFT JOIN Artists ar ON ar.Id = ta.ArtistId
+		WHERE t.AlbumId = @AlbumId
+		ORDER BY t.DiscNumber, t.Position, t.Title, t.Id, ta.Position
+		""";
+
+	private const string SelectAlbumTrackExternalIds = """
+		SELECT TrackId, Provider, Value
+		FROM TrackExternalIds
+		WHERE TrackId IN (SELECT Id FROM Tracks WHERE AlbumId = @AlbumId)
+		""";
+
+	private const string SelectAlbumTrackCreditExternalIds = """
+		SELECT ArtistId, Provider, Value
+		FROM ArtistExternalIds
+		WHERE ArtistId IN (
+			SELECT credit.ArtistId
+			FROM TrackArtists credit
+			JOIN Tracks t ON t.Id = credit.TrackId
+			WHERE t.AlbumId = @AlbumId
+		)
+		""";
+
+	private const string SelectAlbumTrackCreditScans = """
+		SELECT ArtistId, Provider, ScannedAt
+		FROM ArtistScans
+		WHERE ArtistId IN (
+			SELECT credit.ArtistId
+			FROM TrackArtists credit
+			JOIN Tracks t ON t.Id = credit.TrackId
+			WHERE t.AlbumId = @AlbumId
+		)
+		""";
+
+	private const string DeleteAlbumTrackExternalIds = "DELETE FROM TrackExternalIds WHERE TrackId IN (SELECT Id FROM Tracks WHERE AlbumId = @AlbumId)";
+
+	private const string DeleteAlbumTrackArtists = "DELETE FROM TrackArtists WHERE TrackId IN (SELECT Id FROM Tracks WHERE AlbumId = @AlbumId)";
+
+	private const string DeleteAlbumTracks = "DELETE FROM Tracks WHERE AlbumId = @AlbumId";
+
+	private const string InsertTrack = "INSERT INTO Tracks (Id, AlbumId, Title, DiscNumber, Position, DurationMs) VALUES (@Id, @AlbumId, @Title, @DiscNumber, @Position, @DurationMs)";
+
+	private const string InsertTrackExternalId = "INSERT INTO TrackExternalIds (TrackId, Provider, Value) VALUES (@TrackId, @Provider, @Value)";
+
+	private const string InsertTrackArtist = "INSERT INTO TrackArtists (TrackId, ArtistId, Position) VALUES (@TrackId, @ArtistId, @Position)";
+
 	private readonly string _connectionString = options.Value.ConnectionString;
 
 	public async Task<IReadOnlyList<Artist>> GetArtists(CancellationToken ct)
@@ -263,6 +314,34 @@ public class SqliteCatalogue(IOptions<SqliteOptions> options) : ICatalogue
 			.ToList();
 	}
 
+	public async Task<IReadOnlyList<Track>> GetAlbumTracks(AlbumId albumId, CancellationToken ct)
+	{
+		await using var connection = new SqliteConnection(_connectionString);
+		await connection.OpenAsync(ct);
+
+		var parameters = new { AlbumId = albumId };
+		var rows = await connection.QueryAsync<TrackDto, TrackArtistDto?, (TrackDto Track, TrackArtistDto? TrackArtist)>(
+			SelectAlbumTracks,
+			(track, trackArtist) => (track, trackArtist),
+			parameters,
+			splitOn: "CreditPosition");
+		var trackExternalIds = (await connection.QueryAsync<TrackExternalIdDto>(SelectAlbumTrackExternalIds, parameters)).ToLookup();
+		var artistExternalIds = (await connection.QueryAsync<ArtistExternalIdDto>(SelectAlbumTrackCreditExternalIds, parameters)).ToLookup();
+		var artistScans = (await connection.QueryAsync<ArtistScanDto>(SelectAlbumTrackCreditScans, parameters)).ToLookup();
+
+		return rows
+			.GroupBy(r => r.Track.Id)
+			.Select(g =>
+				g.First().Track.ToTrack(
+					g.Where(r => r.TrackArtist is not null)
+					.Select(r => r.TrackArtist!.ToTrackArtist(artistExternalIds, artistScans))
+					.ToList(),
+					trackExternalIds
+				)
+			)
+			.ToList();
+	}
+
 	public async Task SaveArtist(Artist artist, CancellationToken ct)
 	{
 		await using var connection = new SqliteConnection(_connectionString);
@@ -297,6 +376,32 @@ public class SqliteCatalogue(IOptions<SqliteOptions> options) : ICatalogue
 		await connection.ExecuteAsync(DeleteAlbumArtists, albumDto, transaction);
 		await connection.ExecuteAsync(InsertAlbumExternalId, externalIdDtos, transaction);
 		await connection.ExecuteAsync(InsertAlbumArtist, albumArtistDtos, transaction);
+
+		await transaction.CommitAsync(ct);
+	}
+
+	public async Task SaveAlbumTracks(AlbumId albumId, IReadOnlyList<Track> tracks, CancellationToken ct)
+	{
+		if (tracks.Any(track => track.AlbumId != albumId))
+		{
+			throw new ArgumentException($"Every track must belong to album {albumId}", nameof(tracks));
+		}
+
+		await using var connection = new SqliteConnection(_connectionString);
+		await connection.OpenAsync(ct);
+		await using var transaction = await connection.BeginTransactionAsync(ct);
+
+		var parameters = new { AlbumId = albumId };
+		var trackDtos = tracks.Select(track => track.ToDto());
+		var externalIdDtos = tracks.SelectMany(track => track.ExternalIds.Select(externalId => externalId.ToDto(track.Id)));
+		var trackArtistDtos = tracks.SelectMany(track => track.Artists.Select(trackArtist => trackArtist.ToDto(track.Id)));
+
+		await connection.ExecuteAsync(DeleteAlbumTrackExternalIds, parameters, transaction);
+		await connection.ExecuteAsync(DeleteAlbumTrackArtists, parameters, transaction);
+		await connection.ExecuteAsync(DeleteAlbumTracks, parameters, transaction);
+		await connection.ExecuteAsync(InsertTrack, trackDtos, transaction);
+		await connection.ExecuteAsync(InsertTrackExternalId, externalIdDtos, transaction);
+		await connection.ExecuteAsync(InsertTrackArtist, trackArtistDtos, transaction);
 
 		await transaction.CommitAsync(ct);
 	}

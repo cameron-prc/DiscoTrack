@@ -3,6 +3,7 @@ using DiscoTrack.Albums;
 using DiscoTrack.Artists;
 using DiscoTrack.ExternalIds;
 using DiscoTrack.Infrastructure.Catalogue.Dtos;
+using DiscoTrack.Tracks;
 
 namespace DiscoTrack.Infrastructure.Catalogue;
 
@@ -43,6 +44,42 @@ internal static class Extensions
 		};
 	}
 
+	public static Track ToTrack(this TrackDto track, IReadOnlyList<TrackArtist> artists, ILookup<TrackId, ExternalId> externalIds)
+	{
+		return new Track
+		{
+			Id = track.Id,
+			AlbumId = track.AlbumId,
+			ExternalIds = externalIds[track.Id].ToList(),
+			Title = track.Title,
+			DiscNumber = track.DiscNumber,
+			Position = track.Position,
+			DurationMs = track.DurationMs,
+			Artists = artists,
+		};
+	}
+
+	public static TrackArtist ToTrackArtist(this TrackArtistDto trackArtist, ILookup<ArtistId, ExternalId> externalIds, ILookup<ArtistId, KeyValuePair<Provider, DateTimeOffset>> scans)
+	{
+		return new TrackArtist
+		{
+			Position = trackArtist.CreditPosition,
+			Artist = new Artist
+			{
+				Id = trackArtist.ArtistId,
+				ExternalIds = externalIds[trackArtist.ArtistId].ToList(),
+				Name = trackArtist.Name,
+				Tracked = trackArtist.Tracked,
+				LastScannedAt = scans[trackArtist.ArtistId].ToDictionary(),
+			},
+		};
+	}
+
+	public static ILookup<TrackId, ExternalId> ToLookup(this IEnumerable<TrackExternalIdDto> externalIds)
+	{
+		return externalIds.ToLookup(externalId => externalId.TrackId, externalId => ToExternalId(externalId.Provider, externalId.Value));
+	}
+
 	public static ILookup<ArtistId, ExternalId> ToLookup(this IEnumerable<ArtistExternalIdDto> externalIds)
 	{
 		return externalIds.ToLookup(externalId => externalId.ArtistId, externalId => ToExternalId(externalId.Provider, externalId.Value));
@@ -79,6 +116,39 @@ internal static class Extensions
 			Year = album.Year,
 			IsCompilation = album.IsCompilation,
 			Tracked = album.Tracked,
+		};
+	}
+
+	public static TrackDto ToDto(this Track track)
+	{
+		return new TrackDto
+		{
+			Id = track.Id,
+			AlbumId = track.AlbumId,
+			Title = track.Title,
+			DiscNumber = track.DiscNumber,
+			Position = track.Position,
+			DurationMs = track.DurationMs,
+		};
+	}
+
+	public static NewTrackArtistDto ToDto(this TrackArtist trackArtist, TrackId trackId)
+	{
+		return new NewTrackArtistDto
+		{
+			TrackId = trackId,
+			ArtistId = trackArtist.Artist.Id,
+			Position = trackArtist.Position,
+		};
+	}
+
+	public static TrackExternalIdDto ToDto(this ExternalId externalId, TrackId trackId)
+	{
+		return new TrackExternalIdDto
+		{
+			TrackId = trackId,
+			Provider = externalId.Provider.ToString(),
+			Value = externalId.Value,
 		};
 	}
 
