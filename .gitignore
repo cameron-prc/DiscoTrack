@@ -485,3 +485,6 @@ $RECYCLE.BIN/
 *.db
 *.db-wal
 *.db-shm
+
+# Data Protection key ring that encrypts stored provider tokens
+keys/
