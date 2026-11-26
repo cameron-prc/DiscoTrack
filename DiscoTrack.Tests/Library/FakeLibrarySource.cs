@@ -7,6 +7,7 @@ internal sealed class FakeLibrarySource : ILibrarySource
 {
 	public List<LibraryAlbum> Albums { get; } = [];
 	public List<LibraryArtist> Artists { get; } = [];
+	public List<LibraryTrack> Tracks { get; } = [];
 	public List<string> Calls { get; } = [];
 	public string? FailingMethod { get; set; }
 
@@ -25,6 +26,12 @@ internal sealed class FakeLibrarySource : ILibrarySource
 	{
 		Record(nameof(GetArtists));
 		return Task.FromResult<IReadOnlyList<LibraryArtist>>(Artists.ToList());
+	}
+
+	public Task<IReadOnlyList<LibraryTrack>> GetTracks(CancellationToken ct)
+	{
+		Record(nameof(GetTracks));
+		return Task.FromResult<IReadOnlyList<LibraryTrack>>(Tracks.ToList());
 	}
 
 	private void Record(string method)

@@ -19,6 +19,21 @@ internal static class Extensions
 		return new(new SubsonicId(artist.Id), artist.Name, ToMusicBrainzArtistId(artist.MusicBrainzId));
 	}
 
+	public static LibraryTrack ToLibraryTrack(this Child song, string albumId)
+	{
+		var artists = song.Credits().Select(a => a.ToLibraryArtist()).ToList();
+
+		return new(
+			new SubsonicId(song.Id),
+			new SubsonicId(albumId),
+			song.Title,
+			song.DiscNumber ?? 1,
+			song.Track ?? 0,
+			song.Duration,
+			artists,
+			ToMusicBrainzRecordingId(song.MusicBrainzId));
+	}
+
 	private static MusicBrainzArtistId? ToMusicBrainzArtistId(string? value)
 	{
 		return string.IsNullOrEmpty(value) ? null : new MusicBrainzArtistId(value);
@@ -27,5 +42,10 @@ internal static class Extensions
 	private static MusicBrainzReleaseId? ToMusicBrainzReleaseId(string? value)
 	{
 		return string.IsNullOrEmpty(value) ? null : new MusicBrainzReleaseId(value);
+	}
+
+	private static MusicBrainzRecordingId? ToMusicBrainzRecordingId(string? value)
+	{
+		return string.IsNullOrEmpty(value) ? null : new MusicBrainzRecordingId(value);
 	}
 }

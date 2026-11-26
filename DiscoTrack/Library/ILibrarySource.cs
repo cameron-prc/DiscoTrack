@@ -8,4 +8,5 @@ public interface ILibrarySource
 
 	Task<IReadOnlyList<LibraryAlbum>> GetAlbums(CancellationToken ct);
 	Task<IReadOnlyList<LibraryArtist>> GetArtists(CancellationToken ct);
+	Task<IReadOnlyList<LibraryTrack>> GetTracks(CancellationToken ct);
 }

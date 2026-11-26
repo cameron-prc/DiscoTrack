@@ -8,6 +8,8 @@ namespace DiscoTrack.Infrastructure.Library;
 
 public class SubsonicLibrarySource(ISubsonicClient client, IOptions<SubsonicOptions> options) : ILibrarySource
 {
+	private const string EverySong = "\"\"";
+
 	private readonly int _pageSize = options.Value.PageSize;
 
 	public Provider Provider
@@ -38,5 +40,24 @@ public class SubsonicLibrarySource(ISubsonicClient client, IOptions<SubsonicOpti
 			.SelectMany(index => index.Artist)
 			.Select(a => a.ToLibraryArtist())
 			.ToList();
+	}
+
+	public async Task<IReadOnlyList<LibraryTrack>> GetTracks(CancellationToken ct)
+	{
+		var tracks = new List<LibraryTrack>();
+		var offset = 0;
+		IReadOnlyList<Child> songPage;
+
+		do
+		{
+			songPage = await client.Search3(EverySong, _pageSize, offset, ct);
+			offset += songPage.Count;
+			tracks.AddRange(songPage
+				.Where(song => !string.IsNullOrEmpty(song.AlbumId))
+				.Select(song => song.ToLibraryTrack(song.AlbumId!)));
+		}
+		while (songPage.Count >= _pageSize);
+
+		return tracks;
 	}
 }

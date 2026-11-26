@@ -143,6 +143,90 @@ public class SubsonicLibrarySourceTests
 		Assert.Null(artist.MusicBrainzId);
 	}
 
+	[Fact]
+	public async Task GetTracks_asks_for_every_song_and_pages_until_a_short_page()
+	{
+		_client.Songs = [Song("1"), Song("2"), Song("3"), Song("4"), Song("5")];
+
+		var tracks = await Source(pageSize: 2).GetTracks(CancellationToken.None);
+
+		Assert.Equal(["1", "2", "3", "4", "5"], tracks.Select(t => t.Id.Value));
+		Assert.Equal([("\"\"", 2, 0), ("\"\"", 2, 2), ("\"\"", 2, 4)], _client.SongRequests);
+	}
+
+	[Fact]
+	public async Task GetTracks_returns_empty_for_an_empty_library()
+	{
+		var tracks = await Source().GetTracks(CancellationToken.None);
+
+		Assert.Empty(tracks);
+	}
+
+	[Fact]
+	public async Task GetTracks_maps_fields_and_credits_in_order()
+	{
+		_client.Songs =
+		[
+			new Child
+			{
+				Id = "song-tiny", Title = "Tiny Monsters", AlbumId = "alb-parole", DiscNumber = 2, Track = 3, Duration = 268,
+				MusicBrainzId = "rec-tiny",
+				Artists = [new ArtistID3 { Id = "art-puscifer", Name = "Puscifer" }, new ArtistID3 { Id = "art-carina", Name = "Carina Round" }],
+			},
+		];
+
+		var track = (await Source().GetTracks(CancellationToken.None)).Single();
+
+		Assert.Equal(new SubsonicId("song-tiny"), track.Id);
+		Assert.Equal(new SubsonicId("alb-parole"), track.AlbumId);
+		Assert.Equal("Tiny Monsters", track.Title);
+		Assert.Equal(2, track.DiscNumber);
+		Assert.Equal(3, track.TrackNumber);
+		Assert.Equal(268, track.DurationSeconds);
+		Assert.Equal(new MusicBrainzRecordingId("rec-tiny"), track.MusicBrainzId);
+		Assert.Equal([new LibraryArtist(new SubsonicId("art-puscifer"), "Puscifer"), new LibraryArtist(new SubsonicId("art-carina"), "Carina Round")], track.Artists);
+	}
+
+	[Fact]
+	public async Task GetTracks_falls_back_to_artistId_and_artist_when_the_array_is_absent()
+	{
+		_client.Songs = [new Child { Id = "song-alice", Title = "Alice by the Moon", AlbumId = "alb-alice", ArtistId = "art-checks", Artist = "The Checks" }];
+
+		var track = (await Source().GetTracks(CancellationToken.None)).Single();
+
+		Assert.Equal([new LibraryArtist(new SubsonicId("art-checks"), "The Checks")], track.Artists);
+	}
+
+	[Fact]
+	public async Task GetTracks_defaults_an_untagged_song_to_disc_one_position_zero_and_no_duration_or_musicbrainz_id()
+	{
+		_client.Songs = [new Child { Id = "song-untagged", Title = "Untagged", AlbumId = "alb-untagged", MusicBrainzId = "" }];
+
+		var track = (await Source().GetTracks(CancellationToken.None)).Single();
+
+		Assert.Equal(1, track.DiscNumber);
+		Assert.Equal(0, track.TrackNumber);
+		Assert.Null(track.DurationSeconds);
+		Assert.Null(track.MusicBrainzId);
+	}
+
+	[Fact]
+	public async Task GetTracks_skips_songs_without_an_album_and_still_pages_past_them()
+	{
+		_client.Songs = [Song("1"), new Child { Id = "loose", Title = "Loose" }, Song("3")];
+
+		var tracks = await Source(pageSize: 2).GetTracks(CancellationToken.None);
+
+		Assert.Equal(["1", "3"], tracks.Select(t => t.Id.Value));
+		Assert.Equal([2, 2], _client.SongRequests.Select(request => request.Count));
+		Assert.Equal([0, 2], _client.SongRequests.Select(request => request.Offset));
+	}
+
+	private static Child Song(string id)
+	{
+		return new() { Id = id, Title = $"Song {id}", AlbumId = "alb-1", Artists = [Artist("Tool")] };
+	}
+
 	private static AlbumID3 Album(string id)
 	{
 		return new() { Id = id, Name = $"Album {id}", Artists = [Artist("Tool")] };
