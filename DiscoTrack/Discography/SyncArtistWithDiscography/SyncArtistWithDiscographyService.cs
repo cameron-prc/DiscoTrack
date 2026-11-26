@@ -13,6 +13,7 @@ public class SyncArtistWithDiscographyService(
 	IDiscographyArtistResolver resolver,
 	ISyncAlbumWithDiscographyService syncAlbumWithDiscography,
 	ICatalogue catalogue,
+	TimeProvider timeProvider,
 	ILogger<SyncArtistWithDiscographyService> logger) : ISyncArtistWithDiscographyService
 {
 	/// <summary>
@@ -21,6 +22,7 @@ public class SyncArtistWithDiscographyService(
 	/// First resolve the discography artist, save its id and name on the artist and track the artist
 	/// Second sync each of the artist's albums with its discography album
 	/// Third add each discography album no catalogue album holds as a new untracked album
+	/// Fourth save the time of the scan on the artist against the discography's artist provider
 	/// </para>
 	/// </summary>
 	public async Task<Either<IList<ISyncArtistWithDiscographyError>, SyncArtistWithDiscographyResponse>> Run(ArtistId artistId, CancellationToken cancellationToken)
@@ -210,6 +212,19 @@ public class SyncArtistWithDiscographyService(
 			logger.LogWarning(exception, "Failed to save the discography albums of {Artist}", artist);
 
 			return new List<ISyncArtistWithDiscographyError> { new UnableToSaveAlbumError(exception.Message) };
+		}
+
+		artist.SetLastScannedAt(source.ArtistProvider, timeProvider.GetUtcNow());
+
+		try
+		{
+			await catalogue.SaveArtist(artist, cancellationToken);
+		}
+		catch (Exception exception) when (exception is not OperationCanceledException)
+		{
+			logger.LogWarning(exception, "Failed to save the time {Artist} was scanned", artist);
+
+			return new List<ISyncArtistWithDiscographyError> { new UnableToSaveArtistError(exception.Message) };
 		}
 
 		return new SyncArtistWithDiscographyResponse(artist, syncedAlbums, unsyncedAlbums, newAlbums, newArtists, skippedAlbums, absorbedArtist);

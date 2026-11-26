@@ -8,6 +8,7 @@ public class Artist
 	public IReadOnlyList<ExternalId> ExternalIds { get; set; } = [];
 	public required string Name { get; set; }
 	public bool Tracked { get; set; }
+	public IReadOnlyDictionary<Provider, DateTimeOffset> LastScannedAt { get; set; } = new Dictionary<Provider, DateTimeOffset>();
 
 	public void SetExternalId(ExternalId externalId)
 	{
@@ -22,6 +23,14 @@ public class Artist
 			.Where(existing => !providers.Contains(existing.Provider) || externalIds.Contains(existing))
 			.Concat(externalIds.Except(ExternalIds))
 			.ToList();
+	}
+
+	public void SetLastScannedAt(Provider provider, DateTimeOffset scannedAt)
+	{
+		LastScannedAt = LastScannedAt
+			.Where(scan => scan.Key != provider)
+			.Append(KeyValuePair.Create(provider, scannedAt))
+			.ToDictionary();
 	}
 
 	public void RemoveExternalIds(Provider provider)

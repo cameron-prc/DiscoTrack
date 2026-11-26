@@ -1,3 +1,4 @@
+using System.Globalization;
 using DiscoTrack.Albums;
 using DiscoTrack.Artists;
 using DiscoTrack.ExternalIds;
@@ -7,7 +8,7 @@ namespace DiscoTrack.Infrastructure.Catalogue;
 
 internal static class Extensions
 {
-	public static Artist ToArtist(this ArtistDto artist, ILookup<ArtistId, ExternalId> externalIds)
+	public static Artist ToArtist(this ArtistDto artist, ILookup<ArtistId, ExternalId> externalIds, ILookup<ArtistId, KeyValuePair<Provider, DateTimeOffset>> scans)
 	{
 		return new Artist
 		{
@@ -15,6 +16,7 @@ internal static class Extensions
 			ExternalIds = externalIds[artist.Id].ToList(),
 			Name = artist.Name,
 			Tracked = artist.Tracked,
+			LastScannedAt = scans[artist.Id].ToDictionary(),
 		};
 	}
 
@@ -32,12 +34,12 @@ internal static class Extensions
 		};
 	}
 
-	public static AlbumArtist ToAlbumArtist(this AlbumArtistDto albumArtist, ILookup<ArtistId, ExternalId> externalIds)
+	public static AlbumArtist ToAlbumArtist(this AlbumArtistDto albumArtist, ILookup<ArtistId, ExternalId> externalIds, ILookup<ArtistId, KeyValuePair<Provider, DateTimeOffset>> scans)
 	{
 		return new AlbumArtist
 		{
 			Position = albumArtist.Position,
-			Artist = new Artist { Id = albumArtist.ArtistId, ExternalIds = externalIds[albumArtist.ArtistId].ToList(), Name = albumArtist.Name, Tracked = albumArtist.Tracked },
+			Artist = new Artist { Id = albumArtist.ArtistId, ExternalIds = externalIds[albumArtist.ArtistId].ToList(), Name = albumArtist.Name, Tracked = albumArtist.Tracked, LastScannedAt = scans[albumArtist.ArtistId].ToDictionary() },
 		};
 	}
 
@@ -49,6 +51,13 @@ internal static class Extensions
 	public static ILookup<AlbumId, ExternalId> ToLookup(this IEnumerable<AlbumExternalIdDto> externalIds)
 	{
 		return externalIds.ToLookup(externalId => externalId.AlbumId, externalId => ToExternalId(externalId.Provider, externalId.Value));
+	}
+
+	public static ILookup<ArtistId, KeyValuePair<Provider, DateTimeOffset>> ToLookup(this IEnumerable<ArtistScanDto> scans)
+	{
+		return scans.ToLookup(
+			scan => scan.ArtistId,
+			scan => KeyValuePair.Create(Enum.Parse<Provider>(scan.Provider), DateTimeOffset.Parse(scan.ScannedAt, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind)));
 	}
 
 	public static ArtistDto ToDto(this Artist artist)
@@ -90,6 +99,16 @@ internal static class Extensions
 			ArtistId = artistId,
 			Provider = externalId.Provider.ToString(),
 			Value = externalId.Value,
+		};
+	}
+
+	public static ArtistScanDto ToDto(this KeyValuePair<Provider, DateTimeOffset> scan, ArtistId artistId)
+	{
+		return new ArtistScanDto
+		{
+			ArtistId = artistId,
+			Provider = scan.Key.ToString(),
+			ScannedAt = scan.Value.ToString("O", CultureInfo.InvariantCulture),
 		};
 	}
 

@@ -5,6 +5,7 @@ using DiscoTrack.Jobs;
 using DiscoTrack.Jobs.JobHandlers;
 using DiscoTrack.Library.SyncLibrary;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace DiscoTrack;
 
@@ -12,6 +13,7 @@ public static class DependencyInjection
 {
 	public static IServiceCollection AddJobs(this IServiceCollection services)
 	{
+		services.TryAddSingleton(TimeProvider.System);
 		services.AddScoped<SyncLibrary>();
 		services.AddScoped<ISyncLibraryHandler, SyncLibraryJobHandler>();
 		services.AddScoped<IDiscographyAlbumResolver, DiscographyAlbumResolver>();

@@ -13,6 +13,7 @@ namespace DiscoTrack.Tests.Discography;
 
 public class SyncArtistWithDiscographyServiceTests
 {
+	private static readonly DateTimeOffset ScannedAt = new(2026, 11, 26, 9, 30, 0, TimeSpan.Zero);
 	private static readonly MusicBrainzArtistId ToolId = new("mb-tool");
 	private static readonly DiscographyArtist DiscographyTool = new(ToolId, "Tool", "American rock band");
 	private static readonly DiscographyArtist DiscographyPuscifer = new(new MusicBrainzArtistId("mb-puscifer"), "Puscifer", null);
@@ -24,6 +25,7 @@ public class SyncArtistWithDiscographyServiceTests
 	private readonly Mock<IDiscographySource> _source = new();
 	private readonly Mock<IDiscographyArtistResolver> _resolver = new();
 	private readonly Mock<AlbumSync.ISyncAlbumWithDiscographyService> _syncAlbum = new();
+	private readonly Mock<TimeProvider> _time = new();
 	private readonly List<string> _calls = [];
 	private readonly Artist _tool = new() { ExternalIds = [new SubsonicId("art-tool")], Name = "TOOL", Tracked = true };
 	private readonly Album _lateralus;
@@ -45,6 +47,7 @@ public class SyncArtistWithDiscographyServiceTests
 		_knownAlbums = [_lateralus];
 		_knownArtists = [_tool];
 
+		_time.Setup(time => time.GetUtcNow()).Returns(ScannedAt);
 		_source.SetupGet(source => source.ReleaseGroupProvider).Returns(Provider.MusicBrainzReleaseGroup);
 		_source.SetupGet(source => source.ArtistProvider).Returns(Provider.MusicBrainzArtist);
 		_source.SetupGet(source => source.VariousArtistsId).Returns(new MusicBrainzArtistId("mb-various-artists"));
@@ -66,7 +69,7 @@ public class SyncArtistWithDiscographyServiceTests
 
 	private Task<Either<IList<ISyncArtistWithDiscographyError>, SyncArtistWithDiscographyResponse>> Run()
 	{
-		return new SyncArtistWithDiscographyService(_source.Object, _resolver.Object, _syncAlbum.Object, _catalogue.Object, NullLogger<SyncArtistWithDiscographyService>.Instance)
+		return new SyncArtistWithDiscographyService(_source.Object, _resolver.Object, _syncAlbum.Object, _catalogue.Object, _time.Object, NullLogger<SyncArtistWithDiscographyService>.Instance)
 			.Run(_tool.Id, CancellationToken.None);
 	}
 
@@ -82,19 +85,20 @@ public class SyncArtistWithDiscographyServiceTests
 
 		Assert.Equal([new SubsonicId("art-tool"), ToolId], result.GetRight.Artist.ExternalIds);
 		Assert.Equal("Tool", result.GetRight.Artist.Name);
-		_catalogue.Verify(catalogue => catalogue.SaveArtist(_tool, It.IsAny<CancellationToken>()), Times.Once);
-		Assert.Equal([nameof(ICatalogue.SaveArtist), nameof(AlbumSync.ISyncAlbumWithDiscographyService.Run)], _calls);
+		_catalogue.Verify(catalogue => catalogue.SaveArtist(_tool, It.IsAny<CancellationToken>()), Times.Exactly(2));
+		Assert.Equal([nameof(ICatalogue.SaveArtist), nameof(AlbumSync.ISyncAlbumWithDiscographyService.Run), nameof(ICatalogue.SaveArtist)], _calls);
 	}
 
 	[Fact]
-	public async Task Does_not_save_the_artist_when_it_already_holds_the_artist_id_and_name()
+	public async Task Saves_the_artist_only_after_the_scan_when_it_already_holds_the_artist_id_and_name()
 	{
 		_tool.ExternalIds = [new SubsonicId("art-tool"), ToolId];
 		_tool.Name = "Tool";
 
 		await Run();
 
-		_catalogue.Verify(catalogue => catalogue.SaveArtist(It.IsAny<Artist>(), It.IsAny<CancellationToken>()), Times.Never);
+		_catalogue.Verify(catalogue => catalogue.SaveArtist(It.IsAny<Artist>(), It.IsAny<CancellationToken>()), Times.Once);
+		Assert.Equal([nameof(AlbumSync.ISyncAlbumWithDiscographyService.Run), nameof(ICatalogue.SaveArtist)], _calls);
 	}
 
 	[Fact]
@@ -107,7 +111,7 @@ public class SyncArtistWithDiscographyServiceTests
 		var result = await Run();
 
 		Assert.True(result.GetRight.Artist.Tracked);
-		_catalogue.Verify(catalogue => catalogue.SaveArtist(_tool, It.IsAny<CancellationToken>()), Times.Once);
+		_catalogue.Verify(catalogue => catalogue.SaveArtist(_tool, It.IsAny<CancellationToken>()), Times.Exactly(2));
 	}
 
 	[Fact]
@@ -118,7 +122,7 @@ public class SyncArtistWithDiscographyServiceTests
 		var result = await Run();
 
 		Assert.Equal("Tool", result.GetRight.Artist.Name);
-		_catalogue.Verify(catalogue => catalogue.SaveArtist(_tool, It.IsAny<CancellationToken>()), Times.Once);
+		_catalogue.Verify(catalogue => catalogue.SaveArtist(_tool, It.IsAny<CancellationToken>()), Times.Exactly(2));
 	}
 
 	[Fact]
@@ -135,7 +139,7 @@ public class SyncArtistWithDiscographyServiceTests
 		Assert.Equal([new SubsonicId("art-tool"), ToolId, new SubsonicId("art-tool-2")], response.Artist.ExternalIds);
 		Assert.Equal("Tool", response.Artist.Name);
 		_catalogue.Verify(catalogue => catalogue.MergeArtists(_tool, duplicate.Id, It.IsAny<CancellationToken>()), Times.Once);
-		_catalogue.Verify(catalogue => catalogue.SaveArtist(It.IsAny<Artist>(), It.IsAny<CancellationToken>()), Times.Never);
+		_catalogue.Verify(catalogue => catalogue.SaveArtist(_tool, It.IsAny<CancellationToken>()), Times.Once);
 	}
 
 	[Fact]
@@ -175,6 +179,50 @@ public class SyncArtistWithDiscographyServiceTests
 		var response = (await Run()).GetRight;
 
 		Assert.Equal([remaster], response.SyncedAlbums);
+	}
+
+	[Fact]
+	public async Task Saves_the_time_of_the_scan_on_the_artist_after_adding_the_missing_albums()
+	{
+		SetupDiscography(DiscographyLateralus, DiscographyUndertow);
+
+		var result = await Run();
+
+		Assert.Equal([KeyValuePair.Create(Provider.MusicBrainzArtist, ScannedAt)], result.GetRight.Artist.LastScannedAt);
+		Assert.Equal([nameof(ICatalogue.SaveAlbum), nameof(ICatalogue.SaveArtist)], _calls.TakeLast(2));
+	}
+
+	[Fact]
+	public async Task Replaces_an_earlier_scan_time_for_the_provider_and_keeps_the_times_of_other_providers()
+	{
+		var earlier = ScannedAt.AddDays(-7);
+		_tool.SetLastScannedAt(Provider.MusicBrainzArtist, earlier);
+		_tool.SetLastScannedAt(Provider.Subsonic, earlier);
+
+		var result = await Run();
+
+		Assert.Equal(ScannedAt, result.GetRight.Artist.LastScannedAt[Provider.MusicBrainzArtist]);
+		Assert.Equal(earlier, result.GetRight.Artist.LastScannedAt[Provider.Subsonic]);
+	}
+
+	[Fact]
+	public async Task Does_not_set_the_time_of_the_scan_when_the_scan_fails()
+	{
+		_source.Setup(source => source.GetArtistAlbums(ToolId, It.IsAny<CancellationToken>())).ThrowsAsync(new InvalidOperationException("service unavailable"));
+
+		Assert.True((await Run()).IsLeft);
+		Assert.Empty(_tool.LastScannedAt);
+	}
+
+	[Fact]
+	public async Task Returns_an_error_when_the_time_of_the_scan_cannot_be_saved()
+	{
+		_tool.ExternalIds = [new SubsonicId("art-tool"), ToolId];
+		_tool.Name = "Tool";
+		_catalogue.Setup(catalogue => catalogue.SaveArtist(_tool, It.IsAny<CancellationToken>())).ThrowsAsync(new InvalidOperationException("database is locked"));
+
+		Assert.Equal(new UnableToSaveArtistError("database is locked"), Assert.Single((await Run()).GetLeft));
+		_syncAlbum.Verify(syncAlbum => syncAlbum.Run(It.IsAny<AlbumId>(), It.IsAny<CancellationToken>()), Times.Once);
 	}
 
 	[Fact]
@@ -264,7 +312,7 @@ public class SyncArtistWithDiscographyServiceTests
 		Assert.Equal([_tool, maynard, puscifer], created.Artists.Select(albumArtist => albumArtist.Artist));
 		Assert.Equal([1, 2, 3], created.Artists.Select(albumArtist => albumArtist.Position));
 		_catalogue.Verify(catalogue => catalogue.SaveArtist(puscifer, It.IsAny<CancellationToken>()), Times.Once);
-		Assert.Equal([nameof(ICatalogue.SaveArtist), nameof(ICatalogue.SaveAlbum)], _calls.TakeLast(2));
+		Assert.Equal([nameof(ICatalogue.SaveArtist), nameof(ICatalogue.SaveAlbum), nameof(ICatalogue.SaveArtist)], _calls.TakeLast(3));
 	}
 
 	[Fact]

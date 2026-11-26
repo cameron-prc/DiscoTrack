@@ -118,6 +118,31 @@ public class SqliteCatalogue(IOptions<SqliteOptions> options) : ICatalogue
 
 	private const string DeleteAlbum = "DELETE FROM Albums WHERE Id = @Absorbed";
 
+	private const string SelectArtistScans = "SELECT ArtistId, Provider, ScannedAt FROM ArtistScans";
+
+	private const string SelectArtistScansByArtist = "SELECT ArtistId, Provider, ScannedAt FROM ArtistScans WHERE ArtistId = @ArtistId";
+
+	private const string SelectArtistAlbumCreditScans = """
+		SELECT ArtistId, Provider, ScannedAt
+		FROM ArtistScans
+		WHERE ArtistId IN (
+			SELECT credit.ArtistId
+			FROM AlbumArtists credit
+			JOIN AlbumArtists own ON own.AlbumId = credit.AlbumId
+			WHERE own.ArtistId = @ArtistId
+		)
+		""";
+
+	private const string SelectAlbumCreditScans = """
+		SELECT ArtistId, Provider, ScannedAt
+		FROM ArtistScans
+		WHERE ArtistId IN (SELECT ArtistId FROM AlbumArtists WHERE AlbumId = @AlbumId)
+		""";
+
+	private const string DeleteArtistScans = "DELETE FROM ArtistScans WHERE ArtistId = @Id";
+
+	private const string InsertArtistScan = "INSERT INTO ArtistScans (ArtistId, Provider, ScannedAt) VALUES (@ArtistId, @Provider, @ScannedAt)";
+
 	private readonly string _connectionString = options.Value.ConnectionString;
 
 	public async Task<IReadOnlyList<Artist>> GetArtists(CancellationToken ct)
@@ -127,9 +152,10 @@ public class SqliteCatalogue(IOptions<SqliteOptions> options) : ICatalogue
 
 		var artists = await connection.QueryAsync<ArtistDto>(SelectArtists);
 		var externalIds = (await connection.QueryAsync<ArtistExternalIdDto>(SelectArtistExternalIds)).ToLookup();
+		var scans = (await connection.QueryAsync<ArtistScanDto>(SelectArtistScans)).ToLookup();
 
 		return artists
-			.Select(a => a.ToArtist(externalIds))
+			.Select(a => a.ToArtist(externalIds, scans))
 			.ToList();
 	}
 
@@ -144,13 +170,14 @@ public class SqliteCatalogue(IOptions<SqliteOptions> options) : ICatalogue
 			splitOn: "Position");
 		var albumExternalIds = (await connection.QueryAsync<AlbumExternalIdDto>(SelectAlbumExternalIds)).ToLookup();
 		var artistExternalIds = (await connection.QueryAsync<ArtistExternalIdDto>(SelectArtistExternalIds)).ToLookup();
+		var artistScans = (await connection.QueryAsync<ArtistScanDto>(SelectArtistScans)).ToLookup();
 
 		return rows
 			.GroupBy(r => r.Album.Id)
 			.Select(g =>
 				g.First().Album.ToAlbum(
 					g.Where(r => r.AlbumArtist is not null)
-					.Select(r => r.AlbumArtist!.ToAlbumArtist(artistExternalIds))
+					.Select(r => r.AlbumArtist!.ToAlbumArtist(artistExternalIds, artistScans))
 					.ToList(),
 					albumExternalIds
 				)
@@ -171,12 +198,13 @@ public class SqliteCatalogue(IOptions<SqliteOptions> options) : ICatalogue
 			splitOn: "Position");
 		var albumExternalIds = (await connection.QueryAsync<AlbumExternalIdDto>(SelectArtistAlbumExternalIds, parameters)).ToLookup();
 		var artistExternalIds = (await connection.QueryAsync<ArtistExternalIdDto>(SelectArtistAlbumCreditExternalIds, parameters)).ToLookup();
+		var artistScans = (await connection.QueryAsync<ArtistScanDto>(SelectArtistAlbumCreditScans, parameters)).ToLookup();
 
 		return rows
 			.GroupBy(r => r.Album.Id)
 			.Select(g =>
 				g.First().Album.ToAlbum(
-					g.Select(r => r.AlbumArtist!.ToAlbumArtist(artistExternalIds))
+					g.Select(r => r.AlbumArtist!.ToAlbumArtist(artistExternalIds, artistScans))
 					.ToList(),
 					albumExternalIds
 				)
@@ -192,8 +220,9 @@ public class SqliteCatalogue(IOptions<SqliteOptions> options) : ICatalogue
 		var parameters = new { ArtistId = artistId };
 		var artist = await connection.QuerySingleOrDefaultAsync<ArtistDto>(SelectArtist, parameters);
 		var externalIds = (await connection.QueryAsync<ArtistExternalIdDto>(SelectArtistExternalIdsByArtist, parameters)).ToLookup();
+		var scans = (await connection.QueryAsync<ArtistScanDto>(SelectArtistScansByArtist, parameters)).ToLookup();
 
-		return artist?.ToArtist(externalIds);
+		return artist?.ToArtist(externalIds, scans);
 	}
 
 	public async Task<Album?> GetAlbum(AlbumId albumId, CancellationToken ct)
@@ -209,10 +238,11 @@ public class SqliteCatalogue(IOptions<SqliteOptions> options) : ICatalogue
 			splitOn: "Position")).ToList();
 		var albumExternalIds = (await connection.QueryAsync<AlbumExternalIdDto>(SelectAlbumExternalIdsByAlbum, parameters)).ToLookup();
 		var artistExternalIds = (await connection.QueryAsync<ArtistExternalIdDto>(SelectAlbumCreditExternalIds, parameters)).ToLookup();
+		var artistScans = (await connection.QueryAsync<ArtistScanDto>(SelectAlbumCreditScans, parameters)).ToLookup();
 
 		return rows.FirstOrDefault().Album?.ToAlbum(
 			rows.Where(r => r.AlbumArtist is not null)
-				.Select(r => r.AlbumArtist!.ToAlbumArtist(artistExternalIds))
+				.Select(r => r.AlbumArtist!.ToAlbumArtist(artistExternalIds, artistScans))
 				.ToList(),
 			albumExternalIds
 		);
@@ -226,9 +256,10 @@ public class SqliteCatalogue(IOptions<SqliteOptions> options) : ICatalogue
 		var parameters = new { AlbumId = albumId };
 		var artists = await connection.QueryAsync<ArtistDto>(SelectAlbumArtists, parameters);
 		var externalIds = (await connection.QueryAsync<ArtistExternalIdDto>(SelectAlbumCreditExternalIds, parameters)).ToLookup();
+		var scans = (await connection.QueryAsync<ArtistScanDto>(SelectAlbumCreditScans, parameters)).ToLookup();
 
 		return artists
-			.Select(a => a.ToArtist(externalIds))
+			.Select(a => a.ToArtist(externalIds, scans))
 			.ToList();
 	}
 
@@ -240,10 +271,13 @@ public class SqliteCatalogue(IOptions<SqliteOptions> options) : ICatalogue
 
 		var artistDto = artist.ToDto();
 		var externalIdDtos = artist.ExternalIds.Select(externalId => externalId.ToDto(artist.Id));
+		var scanDtos = artist.LastScannedAt.Select(scan => scan.ToDto(artist.Id));
 
 		await connection.ExecuteAsync(UpsertArtist, artistDto, transaction);
 		await connection.ExecuteAsync(DeleteArtistExternalIds, artistDto, transaction);
 		await connection.ExecuteAsync(InsertArtistExternalId, externalIdDtos, transaction);
+		await connection.ExecuteAsync(DeleteArtistScans, artistDto, transaction);
+		await connection.ExecuteAsync(InsertArtistScan, scanDtos, transaction);
 
 		await transaction.CommitAsync(ct);
 	}
@@ -275,15 +309,19 @@ public class SqliteCatalogue(IOptions<SqliteOptions> options) : ICatalogue
 
 		var artistDto = survivor.ToDto();
 		var externalIdDtos = survivor.ExternalIds.Select(externalId => externalId.ToDto(survivor.Id));
+		var scanDtos = survivor.LastScannedAt.Select(scan => scan.ToDto(survivor.Id));
 		var parameters = new { Survivor = survivor.Id, Absorbed = absorbed };
 
 		await connection.ExecuteAsync(UpsertArtist, artistDto, transaction);
 		await connection.ExecuteAsync(MoveAlbumArtists, parameters, transaction);
 		await connection.ExecuteAsync(DeleteArtistAlbumArtists, parameters, transaction);
 		await connection.ExecuteAsync(DeleteArtistExternalIds, new { Id = absorbed }, transaction);
+		await connection.ExecuteAsync(DeleteArtistScans, new { Id = absorbed }, transaction);
 		await connection.ExecuteAsync(DeleteArtist, parameters, transaction);
 		await connection.ExecuteAsync(DeleteArtistExternalIds, artistDto, transaction);
 		await connection.ExecuteAsync(InsertArtistExternalId, externalIdDtos, transaction);
+		await connection.ExecuteAsync(DeleteArtistScans, artistDto, transaction);
+		await connection.ExecuteAsync(InsertArtistScan, scanDtos, transaction);
 
 		await transaction.CommitAsync(ct);
 	}

@@ -21,6 +21,10 @@ else
 	<ul>
 		<li>local: @_artist.Id</li>
 		<li>tracked: @_artist.Tracked</li>
+		@foreach (var scan in _artist.LastScannedAt)
+		{
+			<li>last scanned (@scan.Key): @scan.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</li>
+		}
 		@foreach (var externalId in _artist.ExternalIds)
 		{
 			<li>@externalId.Provider: @externalId.Value</li>
@@ -38,6 +42,7 @@ else
 			<tr>
 				<th>Title</th>
 				<th>Year</th>
+				<th>Tracked</th>
 			</tr>
 		</thead>
 		<tbody>
@@ -46,6 +51,7 @@ else
 				<tr>
 					<td><a href="/albums/@album.Id">@album.Title</a></td>
 					<td>@album.Year</td>
+					<td>@album.Tracked</td>
 				</tr>
 			}
 		</tbody>

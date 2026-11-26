@@ -77,6 +77,66 @@ public sealed class SqliteCatalogueTests : IDisposable
 	}
 
 	[Fact]
+	public async Task SaveArtist_round_trips_the_last_scanned_time_of_each_provider_on_the_artist_and_its_album_credits()
+	{
+		var scannedAt = new Dictionary<Provider, DateTimeOffset>
+		{
+			[Provider.MusicBrainzArtist] = new(2026, 11, 26, 9, 30, 15, 123, TimeSpan.Zero),
+			[Provider.Subsonic] = new(2026, 11, 20, 18, 0, 0, TimeSpan.Zero),
+		};
+		var tool = Artist("art-tool", "Tool");
+		tool.LastScannedAt = scannedAt;
+		await SaveArtists(tool);
+		var lateralus = Album("alb-l", "Lateralus", 2001, Credit(tool, 1));
+		await SaveAlbums(lateralus);
+
+		Assert.Equal(scannedAt, Assert.Single(await _catalogue.GetArtists(CancellationToken.None)).LastScannedAt);
+		Assert.Equal(scannedAt, (await _catalogue.GetArtist(tool.Id, CancellationToken.None))!.LastScannedAt);
+		Assert.Equal(scannedAt, Assert.Single(await _catalogue.GetAlbumArtists(lateralus.Id, CancellationToken.None)).LastScannedAt);
+		Assert.Equal(scannedAt, Assert.Single(await _catalogue.GetAlbums(CancellationToken.None)).Artists[0].Artist.LastScannedAt);
+		Assert.Equal(scannedAt, (await _catalogue.GetAlbum(lateralus.Id, CancellationToken.None))!.Artists[0].Artist.LastScannedAt);
+		Assert.Equal(scannedAt, Assert.Single(await _catalogue.GetArtistAlbums(tool.Id, CancellationToken.None)).Artists[0].Artist.LastScannedAt);
+	}
+
+	[Fact]
+	public async Task SaveArtist_saves_an_artist_that_was_never_scanned()
+	{
+		await SaveArtists(Artist("art-tool", "Tool"));
+
+		Assert.Empty(Assert.Single(await _catalogue.GetArtists(CancellationToken.None)).LastScannedAt);
+	}
+
+	[Fact]
+	public async Task SaveArtist_replaces_the_last_scanned_times_of_an_existing_artist()
+	{
+		var tool = Artist("art-tool", "Tool");
+		tool.SetLastScannedAt(Provider.Subsonic, new DateTimeOffset(2026, 11, 20, 18, 0, 0, TimeSpan.Zero));
+		await SaveArtists(tool);
+
+		var rescannedAt = new DateTimeOffset(2026, 11, 26, 9, 30, 0, TimeSpan.Zero);
+		tool.LastScannedAt = new Dictionary<Provider, DateTimeOffset> { [Provider.MusicBrainzArtist] = rescannedAt };
+		await SaveArtists(tool);
+
+		Assert.Equal([KeyValuePair.Create(Provider.MusicBrainzArtist, rescannedAt)], Assert.Single(await _catalogue.GetArtists(CancellationToken.None)).LastScannedAt);
+	}
+
+	[Fact]
+	public async Task MergeArtists_keeps_the_survivors_last_scanned_times_and_drops_the_absorbed_artists()
+	{
+		var scannedAt = new DateTimeOffset(2026, 11, 26, 9, 30, 0, TimeSpan.Zero);
+		var library = Artist("art-tool", "Tool");
+		var credited = new Artist { ExternalIds = [new MusicBrainzArtistId("mb-tool")], Name = "Tool" };
+		credited.SetLastScannedAt(Provider.MusicBrainzArtist, scannedAt.AddDays(-7));
+		await SaveArtists(library, credited);
+
+		library.ExternalIds = [new SubsonicId("art-tool"), new MusicBrainzArtistId("mb-tool")];
+		library.SetLastScannedAt(Provider.MusicBrainzArtist, scannedAt);
+		await _catalogue.MergeArtists(library, credited.Id, CancellationToken.None);
+
+		Assert.Equal([KeyValuePair.Create(Provider.MusicBrainzArtist, scannedAt)], Assert.Single(await _catalogue.GetArtists(CancellationToken.None)).LastScannedAt);
+	}
+
+	[Fact]
 	public async Task SaveArtist_updates_the_tracked_flag_of_an_existing_artist()
 	{
 		var tool = Artist("art-tool", "Tool");
