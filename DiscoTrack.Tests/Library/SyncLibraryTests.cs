@@ -17,6 +17,7 @@ public class SyncLibraryTests
 	private static readonly LibraryArtist Shihad = new(new SubsonicId("art-shihad"), "Shihad", new MusicBrainzArtistId("mb-shihad"));
 	private static readonly LibraryArtist Puscifer = new(new SubsonicId("art-puscifer"), "Puscifer");
 	private static readonly LibraryArtist CarinaRound = new(new SubsonicId("art-carina"), "Carina Round");
+	private static readonly LibraryArtist Pendulum = new(new SubsonicId("art-pendulum"), "Pendulum");
 
 	private readonly FakeCatalogue _catalogue = new();
 	private readonly FakeLibrarySource _source = new();
@@ -820,6 +821,116 @@ public class SyncLibraryTests
 		await Assert.ThrowsAsync<OperationCanceledException>(() => new SyncLibrary(_catalogue, source.Object, NullLogger<SyncLibrary>.Instance).Run(CancellationToken.None));
 
 		AssertNothingWritten();
+	}
+
+	[Fact]
+	public async Task Gives_the_library_id_to_a_namesake_the_catalogue_album_credits_and_tracks_it()
+	{
+		var (house, drumAndBass) = TwoPendulums();
+
+		var response = (await Sync().Run(CancellationToken.None)).GetRight;
+
+		Assert.Equal([new MusicBrainzArtistId("mb-pendulum-dnb"), new SubsonicId("art-pendulum")], drumAndBass.ExternalIds);
+		Assert.True(drumAndBass.Tracked);
+		Assert.Equal([new SubsonicId("art-pendulum"), new MusicBrainzArtistId("mb-pendulum-house")], house.ExternalIds);
+		Assert.Equal([drumAndBass], response.Artists);
+		Assert.Equal(2, _catalogue.Artists.Count);
+	}
+
+	[Fact]
+	public async Task A_second_run_over_artists_sharing_a_library_id_saves_nothing()
+	{
+		TwoPendulums();
+		await Sync().Run(CancellationToken.None);
+		_catalogue.Calls.Clear();
+
+		var response = (await Sync().Run(CancellationToken.None)).GetRight;
+
+		Assert.Empty(response.Artists);
+		Assert.Empty(response.Albums);
+		Assert.DoesNotContain(_catalogue.Calls, call => call.StartsWith("Save"));
+	}
+
+	[Fact]
+	public async Task Does_not_give_the_library_id_to_a_credited_artist_with_another_name()
+	{
+		var (_, drumAndBass) = TwoPendulums();
+		drumAndBass.Name = "Pendulum UK";
+
+		await Sync().Run(CancellationToken.None);
+
+		Assert.Equal([new MusicBrainzArtistId("mb-pendulum-dnb")], drumAndBass.ExternalIds);
+		Assert.False(drumAndBass.Tracked);
+	}
+
+	[Fact]
+	public async Task Every_artist_sharing_a_library_id_loses_it_when_it_leaves_the_library()
+	{
+		var (house, drumAndBass) = TwoPendulums();
+		await Sync().Run(CancellationToken.None);
+		_source.Albums.Clear();
+
+		await Sync().Run(CancellationToken.None);
+
+		Assert.Equal([new MusicBrainzArtistId("mb-pendulum-house")], house.ExternalIds);
+		Assert.Equal([new MusicBrainzArtistId("mb-pendulum-dnb")], drumAndBass.ExternalIds);
+	}
+
+	[Fact]
+	public async Task Credits_a_new_album_on_the_artist_that_has_held_the_shared_library_id_longest()
+	{
+		var (house, _) = TwoPendulums();
+		await Sync().Run(CancellationToken.None);
+		_source.Albums.Add(Album("alb-elemental", "Elemental", 2021, Pendulum));
+
+		await Sync().Run(CancellationToken.None);
+
+		var elemental = _catalogue.Albums.Single(album => album.Title == "Elemental");
+		Assert.Same(house, Assert.Single(elemental.Artists).Artist);
+	}
+
+	[Fact]
+	public async Task Credits_a_track_on_the_artist_its_album_credits_when_several_share_the_library_id()
+	{
+		var (house, drumAndBass) = TwoPendulums();
+		_source.Tracks.AddRange([
+			Track("song-coma", "alb-knocks", 1, 1, "Coma", Pendulum),
+			Track("song-genesis", "alb-immersion", 1, 1, "Genesis", Pendulum),
+		]);
+
+		await Sync().Run(CancellationToken.None);
+
+		var tracks = _catalogue.Tracks.Values.SelectMany(albumTracks => albumTracks).ToDictionary(track => track.Title);
+		Assert.Same(house, Assert.Single(tracks["Coma"].Artists).Artist);
+		Assert.Same(drumAndBass, Assert.Single(tracks["Genesis"].Artists).Artist);
+	}
+
+	private (Artist House, Artist DrumAndBass) TwoPendulums()
+	{
+		var house = new Artist
+		{
+			Id = new ArtistId(Guid.Parse("00000000-0000-7000-8000-000000000001")),
+			ExternalIds = [new SubsonicId("art-pendulum"), new MusicBrainzArtistId("mb-pendulum-house")],
+			Name = "Pendulum",
+			Tracked = true,
+		};
+		var drumAndBass = new Artist
+		{
+			Id = new ArtistId(Guid.Parse("00000000-0000-7000-8000-000000000002")),
+			ExternalIds = [new MusicBrainzArtistId("mb-pendulum-dnb")],
+			Name = "Pendulum",
+		};
+		_catalogue.Artists.AddRange([house, drumAndBass]);
+		_catalogue.Albums.AddRange([
+			new Album { ExternalIds = [new SubsonicId("alb-knocks")], Title = "3 Knocks", Year = 1997, Tracked = true, Artists = [new AlbumArtist { Artist = house, Position = 1 }] },
+			new Album { ExternalIds = [new SubsonicId("alb-immersion")], Title = "Immersion", Year = 2010, Tracked = true, Artists = [new AlbumArtist { Artist = drumAndBass, Position = 1 }] },
+		]);
+		_source.Albums.AddRange([
+			Album("alb-knocks", "3 Knocks", 1997, Pendulum),
+			Album("alb-immersion", "Immersion", 2010, Pendulum),
+		]);
+
+		return (house, drumAndBass);
 	}
 
 	private async Task<(Album Album, Track Track)> OwnedAlbumWithTrack(Track template)

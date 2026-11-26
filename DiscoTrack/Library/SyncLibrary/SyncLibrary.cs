@@ -2,6 +2,7 @@ using DiscoTrack.Albums;
 using DiscoTrack.Artists;
 using DiscoTrack.Catalogue;
 using DiscoTrack.Common;
+using DiscoTrack.Discography;
 using DiscoTrack.ExternalIds;
 using DiscoTrack.Tracks;
 using Microsoft.Extensions.Logging;
@@ -37,9 +38,7 @@ public class SyncLibrary(ICatalogue catalogue, ILibrarySource librarySource, ILo
 			return new List<ISyncLibraryError> { new FailedToReadLibraryError(exception.Message) };
 		}
 
-		var artistsLookup = knownArtists
-			.SelectMany(knownArtist => knownArtist.ExternalIds.Select(externalId => (ExternalId: externalId, Artist: knownArtist)))
-			.ToDictionary(pair => pair.ExternalId, pair => pair.Artist);
+		var knownArtistsLookup = ToLookup(knownArtists);
 		var albumsLookup = knownAlbums
 			.SelectMany(knownAlbum => knownAlbum.ExternalIds.Select(externalId => (ExternalId: externalId, Album: knownAlbum)))
 			.ToDictionary(pair => pair.ExternalId, pair => pair.Album);
@@ -54,12 +53,12 @@ public class SyncLibrary(ICatalogue catalogue, ILibrarySource librarySource, ILo
 			.DistinctBy(artist => artist.Id)
 			.ToList();
 
-		var newArtists = ImportArtists(libraryArtists, albumArtistIds, artistsLookup);
-		newArtists.Apply(artist => artist.ExternalIds.Apply(externalId => artistsLookup[externalId] = artist));
-
 		var distinctLibraryAlbums = libraryAlbums
 			.DistinctBy(album => album.Id)
 			.ToList();
+
+		var newArtists = ImportArtists(libraryArtists, albumArtistIds, knownArtistsLookup, FindCreditedNamesakes(distinctLibraryAlbums, albumsLookup, knownArtists));
+		var artistsLookup = ToLookup(knownArtists.Concat(newArtists).Distinct());
 
 		var previouslyOwnedAlbums = knownAlbums.Where(HoldsLibraryId).ToHashSet();
 
@@ -99,18 +98,51 @@ public class SyncLibrary(ICatalogue catalogue, ILibrarySource librarySource, ILo
 		return album.ExternalIds.Any(externalId => externalId.Provider == librarySource.Provider);
 	}
 
+	// Several artists can hold one library id: the library merges artists that share a name
+	private static ILookup<ExternalId, Artist> ToLookup(IEnumerable<Artist> artists)
+	{
+		return artists
+			.OrderBy(artist => artist.Id.Value)
+			.SelectMany(artist => artist.ExternalIds.Select(externalId => (ExternalId: externalId, Artist: artist)))
+			.ToLookup(pair => pair.ExternalId, pair => pair.Artist);
+	}
+
+	// The artists a catalogue album credits under the same name as the library does, whichever ids they hold
+	private static IReadOnlyList<(ExternalId LibraryArtistId, Artist Artist)> FindCreditedNamesakes(
+		IReadOnlyList<LibraryAlbum> libraryAlbums,
+		IReadOnlyDictionary<ExternalId, Album> albumLookup,
+		IReadOnlyList<Artist> knownArtists)
+	{
+		var artistsById = knownArtists.ToDictionary(artist => artist.Id);
+
+		return libraryAlbums
+			.Select(libraryAlbum => (LibraryAlbum: libraryAlbum, Album: Find(libraryAlbum.Id, libraryAlbum.MusicBrainzId, albumLookup)))
+			.Where(match => match.Album is not null)
+			.SelectMany(match => match.LibraryAlbum.Artists.SelectMany(libraryArtist => match.Album!.Artists
+				.Where(credit => MatchKey.For(credit.Artist.Name) == MatchKey.For(libraryArtist.Name))
+				.Where(credit => artistsById.ContainsKey(credit.Artist.Id))
+				.Select(credit => (LibraryArtistId: libraryArtist.Id, Artist: artistsById[credit.Artist.Id]))))
+			.Distinct()
+			.ToList();
+	}
+
 	private IReadOnlyList<Artist> ImportArtists(
 		IReadOnlyList<LibraryArtist> libraryArtists,
 		IReadOnlySet<ExternalId> albumArtistIds,
-		IReadOnlyDictionary<ExternalId, Artist> artistLookup)
+		ILookup<ExternalId, Artist> artistLookup,
+		IReadOnlyList<(ExternalId LibraryArtistId, Artist Artist)> creditedNamesakes)
 	{
+		var libraryArtistsById = libraryArtists.ToDictionary(libraryArtist => libraryArtist.Id);
+
 		var matches = libraryArtists
-			.Select(libraryArtist => (LibraryArtist: libraryArtist, Artist: Find(libraryArtist.Id, libraryArtist.MusicBrainzId, artistLookup)))
+			.SelectMany(libraryArtist => FindArtists(libraryArtist, artistLookup).Select(artist => (LibraryArtist: libraryArtist, Artist: artist)))
+			.Concat(creditedNamesakes.Select(namesake => (LibraryArtist: libraryArtistsById[namesake.LibraryArtistId], namesake.Artist)))
+			.Distinct()
 			.ToList();
+		var matchedLibraryArtistIds = matches.Select(match => match.LibraryArtist.Id).ToHashSet();
 
 		var relinkedArtists = matches
-			.Where(match => match.Artist is not null)
-			.GroupBy(match => match.Artist!, match => match.LibraryArtist)
+			.GroupBy(match => match.Artist, match => match.LibraryArtist)
 			.Select(group => (LibraryArtists: group.ToList(), Artist: group.Key, PreviousExternalIds: group.Key.ExternalIds, PreviouslyTracked: group.Key.Tracked))
 			.Apply(match => match.Artist.SetExternalIds(match.LibraryArtists.Select(libraryArtist => libraryArtist.Id).ToList()))
 			.Apply(match => match.Artist.Tracked = match.Artist.Tracked || match.LibraryArtists.Any(libraryArtist => albumArtistIds.Contains(libraryArtist.Id)))
@@ -118,15 +150,17 @@ public class SyncLibrary(ICatalogue catalogue, ILibrarySource librarySource, ILo
 			.Apply(match => logger.LogDebug("Importing {LibraryArtists} into existing artist {Artist}", match.LibraryArtists, match.Artist))
 			.Select(match => match.Artist);
 
-		var newArtists = matches
-			.Where(match => match.Artist is null)
-			.GroupBy(match => match.LibraryArtist.MusicBrainzId ?? match.LibraryArtist.Id, match => match.LibraryArtist)
+		var newArtists = libraryArtists
+			.Where(libraryArtist => !matchedLibraryArtistIds.Contains(libraryArtist.Id))
+			.GroupBy(libraryArtist => libraryArtist.MusicBrainzId ?? libraryArtist.Id)
 			.Select(group => (LibraryArtists: group.ToList(), Artist: BuildArtist(group.ToList(), albumArtistIds)))
 			.Apply(match => logger.LogDebug("Importing {LibraryArtists} into new artist {Artist}", match.LibraryArtists, match.Artist))
 			.Select(match => match.Artist);
 
-		var orphanedArtists = artistLookup.Values
-			.Except(matches.Select(match => match.Artist).OfType<Artist>())
+		var orphanedArtists = artistLookup
+			.SelectMany(holders => holders)
+			.Distinct()
+			.Except(matches.Select(match => match.Artist))
 			.Where(artist => artist.ExternalIds.Any(externalId => externalId.Provider == librarySource.Provider))
 			.Apply(artist => logger.LogDebug("Removing library ids from {Artist} as it is no longer in the library", artist))
 			.Apply(artist => artist.RemoveExternalIds(librarySource.Provider));
@@ -137,7 +171,7 @@ public class SyncLibrary(ICatalogue catalogue, ILibrarySource librarySource, ILo
 	private IReadOnlyList<Either<SyncFailure, Album>> ImportAlbums(
 		IReadOnlyList<LibraryAlbum> libraryAlbums,
 		IReadOnlyDictionary<ExternalId, Album> albumLookup,
-		IReadOnlyDictionary<ExternalId, Artist> artistsLookup)
+		ILookup<ExternalId, Artist> artistsLookup)
 	{
 		var matches = libraryAlbums
 			.Select(libraryAlbum => (LibraryAlbum: libraryAlbum, Album: Find(libraryAlbum.Id, libraryAlbum.MusicBrainzId, albumLookup)))
@@ -183,20 +217,33 @@ public class SyncLibrary(ICatalogue catalogue, ILibrarySource librarySource, ILo
 		};
 	}
 
-	private static Artist FindArtist(LibraryArtist libraryArtist, IReadOnlyDictionary<ExternalId, Artist> artistsByExternalId)
+	private static IReadOnlyList<Artist> FindArtists(LibraryArtist libraryArtist, ILookup<ExternalId, Artist> artistsByExternalId)
 	{
-		return artistsByExternalId.GetValueOrDefault(libraryArtist.Id)
-			?? artistsByExternalId[libraryArtist.MusicBrainzId ?? libraryArtist.Id];
+		var holders = artistsByExternalId[libraryArtist.Id].ToList();
+
+		return holders.Count > 0 || libraryArtist.MusicBrainzId is null
+			? holders
+			: artistsByExternalId[libraryArtist.MusicBrainzId].ToList();
 	}
 
-	private Either<SyncFailure, Album> BuildAlbum(IReadOnlyList<LibraryAlbum> libraryAlbums, IReadOnlyDictionary<ExternalId, Artist> artistsByExternalId)
+	// Prefers the artist the album already credits, then the one the catalogue has held longest
+	private static Artist ChooseArtist(LibraryArtist libraryArtist, IReadOnlyList<AlbumArtist> albumArtists, ILookup<ExternalId, Artist> artistsByExternalId)
+	{
+		var creditedArtistIds = albumArtists.Select(albumArtist => albumArtist.Artist.Id).ToHashSet();
+		var holders = FindArtists(libraryArtist, artistsByExternalId);
+
+		return holders.FirstOrDefault(artist => creditedArtistIds.Contains(artist.Id))
+			?? holders.First();
+	}
+
+	private Either<SyncFailure, Album> BuildAlbum(IReadOnlyList<LibraryAlbum> libraryAlbums, ILookup<ExternalId, Artist> artistsByExternalId)
 	{
 		var libraryAlbum = libraryAlbums[0];
 
 		try
 		{
 			var albumArtists = libraryAlbum.Artists
-				.Select((libraryAlbumArtist, index) => new AlbumArtist { Artist = FindArtist(libraryAlbumArtist, artistsByExternalId), Position = index + 1 })
+				.Select((libraryAlbumArtist, index) => new AlbumArtist { Artist = ChooseArtist(libraryAlbumArtist, [], artistsByExternalId), Position = index + 1 })
 				.ToList();
 
 			var album = new Album
@@ -225,7 +272,7 @@ public class SyncLibrary(ICatalogue catalogue, ILibrarySource librarySource, ILo
 		Album album,
 		IReadOnlyList<Track> knownTracks,
 		IReadOnlyList<LibraryTrack> libraryTracks,
-		IReadOnlyDictionary<ExternalId, Artist> artistsByExternalId)
+		ILookup<ExternalId, Artist> artistsByExternalId)
 	{
 		var tracks = knownTracks.ToList();
 		var libraryIds = new Dictionary<Track, List<ExternalId>>();
@@ -254,7 +301,7 @@ public class SyncLibrary(ICatalogue catalogue, ILibrarySource librarySource, ILo
 		return tracks;
 	}
 
-	private static Track BuildTrack(Album album, LibraryTrack libraryTrack, IReadOnlyDictionary<ExternalId, Artist> artistsByExternalId)
+	private static Track BuildTrack(Album album, LibraryTrack libraryTrack, ILookup<ExternalId, Artist> artistsByExternalId)
 	{
 		return new Track
 		{
@@ -265,7 +312,7 @@ public class SyncLibrary(ICatalogue catalogue, ILibrarySource librarySource, ILo
 			DurationMs = libraryTrack.DurationSeconds * 1000,
 			ExternalIds = libraryTrack.ExternalIds,
 			Artists = libraryTrack.Artists
-				.Select(libraryArtist => FindArtist(libraryArtist, artistsByExternalId))
+				.Select(libraryArtist => ChooseArtist(libraryArtist, album.Artists, artistsByExternalId))
 				.Distinct()
 				.Select((artist, index) => new TrackArtist { Artist = artist, Position = index + 1 })
 				.ToList(),
@@ -275,7 +322,7 @@ public class SyncLibrary(ICatalogue catalogue, ILibrarySource librarySource, ILo
 	private async Task<IReadOnlyList<Either<SyncFailure, IReadOnlyList<Track>>>> SaveTracks(
 		IEnumerable<Album> albums,
 		ILookup<ExternalId, LibraryTrack> libraryTracksByAlbum,
-		IReadOnlyDictionary<ExternalId, Artist> artistsByExternalId,
+		ILookup<ExternalId, Artist> artistsByExternalId,
 		CancellationToken ct)
 	{
 		var saves = new List<Either<SyncFailure, IReadOnlyList<Track>>>();
@@ -291,7 +338,7 @@ public class SyncLibrary(ICatalogue catalogue, ILibrarySource librarySource, ILo
 	private async Task<Either<SyncFailure, IReadOnlyList<Track>>> SaveAlbumTracks(
 		Album album,
 		ILookup<ExternalId, LibraryTrack> libraryTracksByAlbum,
-		IReadOnlyDictionary<ExternalId, Artist> artistsByExternalId,
+		ILookup<ExternalId, Artist> artistsByExternalId,
 		CancellationToken ct)
 	{
 		try
