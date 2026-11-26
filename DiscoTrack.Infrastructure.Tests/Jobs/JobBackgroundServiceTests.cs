@@ -163,6 +163,7 @@ public class JobBackgroundServiceTests : IDisposable
 			.AddScoped(_ => MockHandler())
 			.AddScoped(_ => Mock.Of<ISyncAlbumWithDiscographyJobHandler>())
 			.AddScoped(_ => Mock.Of<ISyncArtistWithDiscographyJobHandler>())
+			.AddScoped(_ => Mock.Of<ISyncAllArtistsWithDiscographyJobHandler>())
 			.AddScoped<IJobRunner, JobRunner>()
 			.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>))
 			.AddJobBackgroundService();

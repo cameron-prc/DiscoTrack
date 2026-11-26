@@ -4,5 +4,6 @@ public enum JobType
 {
 	SyncLibrary,
 	SyncAlbumWithDiscography,
-	SyncArtistWithDiscography
+	SyncArtistWithDiscography,
+	SyncAllArtistsWithDiscography
 }

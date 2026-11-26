@@ -20,6 +20,7 @@ public static class DependencyInjection
 		services.AddScoped<IDiscographyArtistResolver, DiscographyArtistResolver>();
 		services.AddScoped<ISyncArtistWithDiscographyService, SyncArtistWithDiscographyService>();
 		services.AddScoped<ISyncArtistWithDiscographyJobHandler, SyncArtistWithDiscographyJobHandler>();
+		services.AddScoped<ISyncAllArtistsWithDiscographyJobHandler, SyncAllArtistsWithDiscographyJobHandler>();
 		services.AddScoped<IJobRunner, JobRunner>();
 		return services;
 	}

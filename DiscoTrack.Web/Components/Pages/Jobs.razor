@@ -6,10 +6,16 @@
 <h1>Jobs</h1>
 
 <button @onclick="SyncLibrary">Sync library</button>
+<button @onclick="SyncAllArtistsWithDiscography">Sync all artists with discography</button>
 
 @code {
 	private async Task SyncLibrary()
 	{
 		await jobQueue.Enqueue(new Job(JobType.SyncLibrary), CancellationToken.None);
+	}
+
+	private async Task SyncAllArtistsWithDiscography()
+	{
+		await jobQueue.Enqueue(new Job(JobType.SyncAllArtistsWithDiscography), CancellationToken.None);
 	}
 }

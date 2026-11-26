@@ -56,6 +56,16 @@ public class DependencyInjectionTests
 		Assert.IsType<DiscographyArtistResolver>(resolver);
 	}
 
+	[Fact]
+	public void AddJobs_resolves_the_sync_all_artists_handler()
+	{
+		using var scope = BuildProvider().CreateScope();
+
+		var handler = scope.ServiceProvider.GetRequiredService<ISyncAllArtistsWithDiscographyJobHandler>();
+
+		Assert.IsType<SyncAllArtistsWithDiscographyJobHandler>(handler);
+	}
+
 	private static ServiceProvider BuildProvider()
 	{
 		return new ServiceCollection()

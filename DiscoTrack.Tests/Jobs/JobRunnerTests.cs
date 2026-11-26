@@ -12,10 +12,11 @@ public class JobRunnerTests
 	private readonly Mock<ISyncLibraryHandler> _handler = new();
 	private readonly Mock<ISyncAlbumWithDiscographyJobHandler> _discographyHandler = new();
 	private readonly Mock<ISyncArtistWithDiscographyJobHandler> _artistDiscographyHandler = new();
+	private readonly Mock<ISyncAllArtistsWithDiscographyJobHandler> _allArtistsDiscographyHandler = new();
 
 	private JobRunner Runner()
 	{
-		return new JobRunner(_handler.Object, _discographyHandler.Object, _artistDiscographyHandler.Object, NullLogger<JobRunner>.Instance);
+		return new JobRunner(_handler.Object, _discographyHandler.Object, _artistDiscographyHandler.Object, _allArtistsDiscographyHandler.Object, NullLogger<JobRunner>.Instance);
 	}
 
 	[Fact]
@@ -62,6 +63,18 @@ public class JobRunnerTests
 
 		Assert.Equal(JobStatus.Failed, job.Status);
 		_artistDiscographyHandler.Verify(h => h.Execute(It.IsAny<ArtistId>(), It.IsAny<CancellationToken>()), Times.Never);
+	}
+
+	[Fact]
+	public async Task Runs_the_sync_all_artists_handler_for_a_sync_all_artists_job()
+	{
+		using var cts = new CancellationTokenSource();
+
+		await Runner().Start(new Job(JobType.SyncAllArtistsWithDiscography), cts.Token);
+
+		_allArtistsDiscographyHandler.Verify(h => h.Execute(cts.Token), Times.Once);
+		_artistDiscographyHandler.Verify(h => h.Execute(It.IsAny<ArtistId>(), It.IsAny<CancellationToken>()), Times.Never);
+		_handler.Verify(h => h.Execute(It.IsAny<CancellationToken>()), Times.Never);
 	}
 
 	[Fact]
