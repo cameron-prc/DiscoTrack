@@ -130,6 +130,7 @@ internal static class Extensions
 			Provider.MusicBrainzArtist => new MusicBrainzArtistId(value),
 			Provider.MusicBrainzRelease => new MusicBrainzReleaseId(value),
 			Provider.MusicBrainzReleaseGroup => new MusicBrainzReleaseGroupId(value),
+			Provider.MusicBrainzRecording => new MusicBrainzRecordingId(value),
 			_ => throw new ArgumentOutOfRangeException(nameof(provider), provider, null),
 		};
 	}

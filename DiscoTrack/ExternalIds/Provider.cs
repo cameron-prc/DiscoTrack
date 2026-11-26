@@ -6,4 +6,5 @@ public enum Provider
 	MusicBrainzArtist,
 	MusicBrainzRelease,
 	MusicBrainzReleaseGroup,
+	MusicBrainzRecording,
 }
