@@ -31,6 +31,10 @@ else
 		<p>Discography sync queued</p>
 	}
 	<p>Track Count: @_tracks.Count</p>
+	@if (MissingTracks > 0)
+	{
+		<p>Incomplete: @MissingTracks of @_tracks.Count tracks are not in the library</p>
+	}
 	<table>
 		<thead>
 			<tr>
@@ -44,7 +48,7 @@ else
 		<tbody>
 			@foreach (var track in _tracks)
 			{
-				<tr>
+				<tr style="@(InLibrary(track) ? null : "text-decoration: line-through")">
 					<td>@track.DiscNumber</td>
 					<td>@track.Position</td>
 					<td>@track.Title</td>
@@ -74,6 +78,14 @@ else
 		_externalIds = _album.ExternalIds;
 		_tracks = await Catalogue.GetAlbumTracks(albumId, CancellationToken.None);
 		_loading = false;
+	}
+
+	private int MissingTracks
+		=> _tracks.Any(InLibrary) ? _tracks.Count(track => !InLibrary(track)) : 0;
+
+	private static bool InLibrary(Track track)
+	{
+		return track.ExternalIds.Any(externalId => externalId.Provider == Provider.Subsonic);
 	}
 
 	private static string Length(Track track)
