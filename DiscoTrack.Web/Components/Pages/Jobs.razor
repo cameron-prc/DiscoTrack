@@ -7,6 +7,7 @@
 
 <button @onclick="SyncLibrary">Sync library</button>
 <button @onclick="SyncAllArtistsWithDiscography">Sync all artists with discography</button>
+<button @onclick="SyncListenHistory">Sync listen history</button>
 
 @code {
 	private async Task SyncLibrary()
@@ -17,5 +18,10 @@
 	private async Task SyncAllArtistsWithDiscography()
 	{
 		await jobQueue.Enqueue(new Job(JobType.SyncAllArtistsWithDiscography), CancellationToken.None);
+	}
+
+	private async Task SyncListenHistory()
+	{
+		await jobQueue.Enqueue(new Job(JobType.SyncListenHistory), CancellationToken.None);
 	}
 }

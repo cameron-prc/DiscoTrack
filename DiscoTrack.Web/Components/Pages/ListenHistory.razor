@@ -1,0 +1,71 @@
+@page "/listen-history"
+@inject IListenHistory History
+
+<PageTitle>Listen history</PageTitle>
+
+<h1>Listen history</h1>
+
+@if (_loading)
+{
+	<p>Loading</p>
+}
+else
+{
+	<p>count: @_count</p>
+	<p>
+		page @CurrentPage of @PageCount
+		@if (CurrentPage > 1)
+		{
+			<a href="/listen-history?page=@(CurrentPage - 1)">Newer</a>
+		}
+		@if (CurrentPage < PageCount)
+		{
+			<a href="/listen-history?page=@(CurrentPage + 1)">Older</a>
+		}
+	</p>
+	<table>
+		<thead>
+			<tr>
+				<th>Played</th>
+				<th>Track</th>
+				<th>Artists</th>
+				<th>Album</th>
+			</tr>
+		</thead>
+		<tbody>
+			@foreach (var play in _plays)
+			{
+				<tr>
+					<td>@play.PlayedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+					<td>@play.TrackTitle</td>
+					<td>@string.Join(", ", play.Artists.Select(artist => artist.Name))</td>
+					<td>@play.AlbumTitle</td>
+				</tr>
+			}
+		</tbody>
+	</table>
+}
+
+@code {
+	private const int PageSize = 50;
+
+	[SupplyParameterFromQuery(Name = "page")]
+	public int? Page { get; set; }
+
+	private bool _loading = true;
+	private int _count;
+	private IReadOnlyList<Play> _plays = [];
+
+	private int PageCount
+		=> Math.Max(1, (_count + PageSize - 1) / PageSize);
+
+	private int CurrentPage
+		=> Math.Clamp(Page ?? 1, 1, PageCount);
+
+	protected override async Task OnParametersSetAsync()
+	{
+		_count = await History.CountPlays(CancellationToken.None);
+		_plays = await History.GetPlays((CurrentPage - 1) * PageSize, PageSize, CancellationToken.None);
+		_loading = false;
+	}
+}
