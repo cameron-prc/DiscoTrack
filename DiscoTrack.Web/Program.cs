@@ -18,6 +18,8 @@ builder.Services
 	.AddMusicBrainzDiscographySource(builder.Configuration)
 	.AddProviderTokens(builder.Configuration)
 	.AddSpotifyConnection(builder.Configuration)
+	.AddSpotifyListenHistorySource()
+	.AddSqliteListenHistory()
 	.AddJobs()
 	.AddInMemoryJobQueue()
 	.AddJobBackgroundService();

@@ -9,10 +9,12 @@ using DiscoTrack.Infrastructure.Connections;
 using DiscoTrack.Infrastructure.Discography;
 using DiscoTrack.Infrastructure.Jobs;
 using DiscoTrack.Infrastructure.Library;
+using DiscoTrack.Infrastructure.ListenHistory;
 using DiscoTrack.Infrastructure.Sqlite;
 using DiscoTrack.Infrastructure.Tokens;
 using DiscoTrack.Jobs;
 using DiscoTrack.Library;
+using DiscoTrack.ListenHistory;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -94,6 +96,21 @@ public static class DependencyInjection
 		services.AddScoped<ISpotifyAccessTokens, SpotifyAccessTokens>();
 		services.AddTransient<SpotifyAuthorisationHandler>();
 		services.AddScoped<IProviderConnection, SpotifyConnection>();
+		return services;
+	}
+
+	public static IServiceCollection AddSpotifyListenHistorySource(this IServiceCollection services)
+	{
+		services.AddHttpClient<ISpotifyClient, SpotifyClient>((provider, http) =>
+				http.BaseAddress = new Uri(provider.GetRequiredService<IOptions<SpotifyOptions>>().Value.ApiBaseUrl.TrimEnd('/') + "/"))
+			.AddHttpMessageHandler<SpotifyAuthorisationHandler>();
+		services.AddScoped<IListenHistorySource, SpotifyListenHistorySource>();
+		return services;
+	}
+
+	public static IServiceCollection AddSqliteListenHistory(this IServiceCollection services)
+	{
+		services.AddScoped<IListenHistory, SqliteListenHistory>();
 		return services;
 	}
 

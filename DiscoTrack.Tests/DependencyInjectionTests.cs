@@ -3,6 +3,8 @@ using DiscoTrack.Discography;
 using DiscoTrack.Jobs;
 using DiscoTrack.Jobs.JobHandlers;
 using DiscoTrack.Library;
+using DiscoTrack.ListenHistory;
+using DiscoTrack.ListenHistory.SyncListenHistory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -66,12 +68,26 @@ public class DependencyInjectionTests
 		Assert.IsType<SyncAllArtistsWithDiscographyJobHandler>(handler);
 	}
 
+	[Fact]
+	public void AddJobs_resolves_the_sync_listen_history_handler_and_service()
+	{
+		using var scope = BuildProvider().CreateScope();
+
+		var handler = scope.ServiceProvider.GetRequiredService<ISyncListenHistoryJobHandler>();
+		var service = scope.ServiceProvider.GetRequiredService<ISyncListenHistoryService>();
+
+		Assert.IsType<SyncListenHistoryJobHandler>(handler);
+		Assert.IsType<SyncListenHistoryService>(service);
+	}
+
 	private static ServiceProvider BuildProvider()
 	{
 		return new ServiceCollection()
 			.AddSingleton(Mock.Of<ICatalogue>())
 			.AddSingleton(Mock.Of<ILibrarySource>())
 			.AddSingleton(Mock.Of<IDiscographySource>())
+			.AddSingleton(Mock.Of<IListenHistorySource>())
+			.AddSingleton(Mock.Of<IListenHistory>())
 			.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>))
 			.AddJobs()
 			.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });

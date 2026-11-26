@@ -9,14 +9,16 @@ public class JobRunner : IJobRunner
 	private readonly ISyncAlbumWithDiscographyJobHandler _syncAlbumWithDiscographyJobHandler;
 	private readonly ISyncArtistWithDiscographyJobHandler _syncArtistWithDiscographyJobHandler;
 	private readonly ISyncAllArtistsWithDiscographyJobHandler _syncAllArtistsWithDiscographyJobHandler;
+	private readonly ISyncListenHistoryJobHandler _syncListenHistoryJobHandler;
 	private readonly ILogger<JobRunner> _logger;
 
-	public JobRunner(ISyncLibraryHandler syncLibraryHandler, ISyncAlbumWithDiscographyJobHandler syncAlbumWithDiscographyJobHandler, ISyncArtistWithDiscographyJobHandler syncArtistWithDiscographyJobHandler, ISyncAllArtistsWithDiscographyJobHandler syncAllArtistsWithDiscographyJobHandler, ILogger<JobRunner> logger)
+	public JobRunner(ISyncLibraryHandler syncLibraryHandler, ISyncAlbumWithDiscographyJobHandler syncAlbumWithDiscographyJobHandler, ISyncArtistWithDiscographyJobHandler syncArtistWithDiscographyJobHandler, ISyncAllArtistsWithDiscographyJobHandler syncAllArtistsWithDiscographyJobHandler, ISyncListenHistoryJobHandler syncListenHistoryJobHandler, ILogger<JobRunner> logger)
 	{
 		_syncLibraryHandler = syncLibraryHandler;
 		_syncAlbumWithDiscographyJobHandler = syncAlbumWithDiscographyJobHandler;
 		_syncArtistWithDiscographyJobHandler = syncArtistWithDiscographyJobHandler;
 		_syncAllArtistsWithDiscographyJobHandler = syncAllArtistsWithDiscographyJobHandler;
+		_syncListenHistoryJobHandler = syncListenHistoryJobHandler;
 		_logger = logger;
 	}
 
@@ -53,6 +55,7 @@ public class JobRunner : IJobRunner
 			JobType.SyncArtistWithDiscography when job.ArtistId is { } artistId => _syncArtistWithDiscographyJobHandler.Execute(artistId, cancellationToken),
 			JobType.SyncArtistWithDiscography => throw new InvalidOperationException($"{job.Type} job {job.Id} has no artist id"),
 			JobType.SyncAllArtistsWithDiscography => _syncAllArtistsWithDiscographyJobHandler.Execute(cancellationToken),
+			JobType.SyncListenHistory => _syncListenHistoryJobHandler.Execute(cancellationToken),
 			_ => throw new InvalidOperationException($"No handler for {job.Type} job {job.Id}"),
 		};
 	}
