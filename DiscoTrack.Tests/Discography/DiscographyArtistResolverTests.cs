@@ -10,8 +10,8 @@ public class DiscographyArtistResolverTests
 {
 	private static readonly DiscographyArtist Tool = new(new MusicBrainzArtistId("mb-tool"), "Tool", "American rock band");
 	private static readonly DiscographyArtist OtherTool = new(new MusicBrainzArtistId("mb-tool-other"), "Tool", "Danish duo");
-	private static readonly DiscographyAlbum Lateralus = new(new MusicBrainzReleaseGroupId("rg-lateralus"), [], "Lateralus", 2001, IsCompilation: false, [Tool]);
-	private static readonly DiscographyAlbum Undertow = new(new MusicBrainzReleaseGroupId("rg-undertow"), [], "Undertow", 1993, IsCompilation: false, [Tool]);
+	private static readonly DiscographyAlbum Lateralus = new(new MusicBrainzReleaseGroupId("rg-lateralus"), "Lateralus", 2001, IsCompilation: false, [Tool]);
+	private static readonly DiscographyAlbum Undertow = new(new MusicBrainzReleaseGroupId("rg-undertow"), "Undertow", 1993, IsCompilation: false, [Tool]);
 
 	private readonly Mock<IDiscographySource> _source = new();
 	private readonly Artist _artist = new() { ExternalIds = [new SubsonicId("art-tool")], Name = "TOOL!" };

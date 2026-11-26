@@ -47,18 +47,12 @@ public partial class MusicBrainzDiscographySource(IMusicBrainzClient client, IOp
 			return null;
 		}
 
-		return release.ReleaseGroup.ToDiscographyAlbum(await GetReleases(release.ReleaseGroup.Id, ct));
+		return release.ReleaseGroup.ToDiscographyAlbum();
 	}
 
 	private async Task<DiscographyAlbum?> GetAlbum(MusicBrainzReleaseGroupId releaseGroupId, CancellationToken ct)
 	{
-		var releaseGroup = await client.GetReleaseGroup(releaseGroupId.Value, ct);
-		if (releaseGroup is null)
-		{
-			return null;
-		}
-
-		return releaseGroup.ToDiscographyAlbum(await GetReleases(releaseGroup.Id, ct));
+		return (await client.GetReleaseGroup(releaseGroupId.Value, ct))?.ToDiscographyAlbum();
 	}
 
 	public Task<DiscographyArtist?> GetArtist(ExternalId id, CancellationToken ct)
@@ -89,7 +83,7 @@ public partial class MusicBrainzDiscographySource(IMusicBrainzClient client, IOp
 		var releaseGroups = await client.SearchReleaseGroups($"arid:{artistId.Value} AND releasegroup:\"{Escape(title)}\"", _searchSize, 0, ct);
 
 		return releaseGroups
-			.Select(releaseGroup => releaseGroup.ToDiscographyAlbum(releaseGroup.Releases ?? []))
+			.Select(releaseGroup => releaseGroup.ToDiscographyAlbum())
 			.ToList();
 	}
 
@@ -116,7 +110,7 @@ public partial class MusicBrainzDiscographySource(IMusicBrainzClient client, IOp
 
 		return releaseGroups
 			.Where(releaseGroup => releaseGroup.SecondaryTypes is null or { Count: 0 })
-			.Select(releaseGroup => releaseGroup.ToDiscographyAlbum([]))
+			.Select(releaseGroup => releaseGroup.ToDiscographyAlbum())
 			.ToList();
 	}
 
@@ -127,21 +121,6 @@ public partial class MusicBrainzDiscographySource(IMusicBrainzClient client, IOp
 		return artists
 			.Select(artist => artist.ToDiscographyArtist())
 			.ToList();
-	}
-
-	private async Task<IReadOnlyList<Release>> GetReleases(string releaseGroupId, CancellationToken ct)
-	{
-		var releases = new List<Release>();
-		IReadOnlyList<Release> releasePage;
-
-		do
-		{
-			releasePage = await client.BrowseReleases(releaseGroupId, _pageSize, releases.Count, ct);
-			releases.AddRange(releasePage);
-		}
-		while (releasePage.Count >= _pageSize);
-
-		return releases;
 	}
 
 	private static string Escape(string value)

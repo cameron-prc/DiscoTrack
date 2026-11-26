@@ -17,8 +17,8 @@ public class SyncArtistWithDiscographyServiceTests
 	private static readonly DiscographyArtist DiscographyTool = new(ToolId, "Tool", "American rock band");
 	private static readonly DiscographyArtist DiscographyPuscifer = new(new MusicBrainzArtistId("mb-puscifer"), "Puscifer", null);
 	private static readonly MusicBrainzReleaseGroupId LateralusId = new("rg-lateralus");
-	private static readonly DiscographyAlbum DiscographyLateralus = new(LateralusId, [], "Lateralus", 2001, IsCompilation: false, [DiscographyTool]);
-	private static readonly DiscographyAlbum DiscographyUndertow = new(new MusicBrainzReleaseGroupId("rg-undertow"), [], "Undertow", 1993, IsCompilation: false, [DiscographyTool]);
+	private static readonly DiscographyAlbum DiscographyLateralus = new(LateralusId, "Lateralus", 2001, IsCompilation: false, [DiscographyTool]);
+	private static readonly DiscographyAlbum DiscographyUndertow = new(new MusicBrainzReleaseGroupId("rg-undertow"), "Undertow", 1993, IsCompilation: false, [DiscographyTool]);
 
 	private readonly Mock<ICatalogue> _catalogue = new();
 	private readonly Mock<IDiscographySource> _source = new();
@@ -257,7 +257,7 @@ public class SyncArtistWithDiscographyServiceTests
 	{
 		SetupDiscography(
 			DiscographyUndertow with { Artists = [DiscographyTool, DiscographyPuscifer] },
-			new DiscographyAlbum(new MusicBrainzReleaseGroupId("rg-opiate"), [], "Opiate", 1992, IsCompilation: false, [DiscographyPuscifer, DiscographyTool]));
+			new DiscographyAlbum(new MusicBrainzReleaseGroupId("rg-opiate"), "Opiate", 1992, IsCompilation: false, [DiscographyPuscifer, DiscographyTool]));
 
 		var response = (await Run()).GetRight;
 

@@ -58,7 +58,7 @@ public class SyncAlbumWithDiscographyServiceTests
 
 	private static DiscographyAlbum Discography(params DiscographyArtist[] artists)
 	{
-		return new DiscographyAlbum(ReleaseGroupId, [ReleaseId, new MusicBrainzReleaseId("rel-lateralus-vinyl")], "Lateralus", 2001, IsCompilation: false, artists);
+		return new DiscographyAlbum(ReleaseGroupId, "Lateralus", 2001, IsCompilation: false, artists);
 	}
 
 	[Fact]

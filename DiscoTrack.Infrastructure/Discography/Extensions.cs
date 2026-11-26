@@ -8,13 +8,12 @@ internal static class Extensions
 {
 	private const string VariousArtistsId = "89ad4ac3-39f7-470e-963a-56509c546377";
 
-	public static DiscographyAlbum ToDiscographyAlbum(this ReleaseGroup releaseGroup, IReadOnlyList<Release> releases)
+	public static DiscographyAlbum ToDiscographyAlbum(this ReleaseGroup releaseGroup)
 	{
 		var credits = releaseGroup.ArtistCredit ?? [];
 
 		return new(
 			new MusicBrainzReleaseGroupId(releaseGroup.Id),
-			releases.Select(ExternalId (release) => new MusicBrainzReleaseId(release.Id)).ToList(),
 			releaseGroup.Title,
 			ToYear(releaseGroup.FirstReleaseDate),
 			credits.Any(credit => credit.Artist.Id == VariousArtistsId),

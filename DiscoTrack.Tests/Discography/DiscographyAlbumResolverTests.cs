@@ -12,7 +12,7 @@ public class DiscographyAlbumResolverTests
 	private static readonly MusicBrainzReleaseGroupId ReleaseGroupId = new("rg-lateralus");
 	private static readonly MusicBrainzArtistId ToolId = new("mb-tool");
 	private static readonly MusicBrainzArtistId PusciferId = new("mb-puscifer");
-	private static readonly DiscographyAlbum Lateralus = new(ReleaseGroupId, [ReleaseId], "Lateralus", 2001, IsCompilation: false, []);
+	private static readonly DiscographyAlbum Lateralus = new(ReleaseGroupId, "Lateralus", 2001, IsCompilation: false, []);
 
 	private readonly Mock<IDiscographySource> _source = new();
 	private readonly Artist _tool = new() { ExternalIds = [new SubsonicId("art-tool"), ToolId], Name = "Tool" };

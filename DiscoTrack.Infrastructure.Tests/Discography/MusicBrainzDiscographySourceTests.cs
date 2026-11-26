@@ -29,17 +29,15 @@ public class MusicBrainzDiscographySourceTests
 	}
 
 	[Fact]
-	public async Task GetAlbum_by_release_returns_its_release_group_and_every_release_in_it()
+	public async Task GetAlbum_by_release_returns_its_release_group()
 	{
 		_client.Setup(client => client.GetRelease("rel-lateralus-cd", It.IsAny<CancellationToken>()))
 			.ReturnsAsync(Release("rel-lateralus-cd") with { ReleaseGroup = Lateralus });
-		SetupReleases("rg-lateralus", "rel-lateralus-cd", "rel-lateralus-vinyl");
 
 		var album = await Source().GetAlbum(new MusicBrainzReleaseId("rel-lateralus-cd"), CancellationToken.None);
 
 		Assert.NotNull(album);
 		Assert.Equal(new MusicBrainzReleaseGroupId("rg-lateralus"), album.ReleaseGroupId);
-		Assert.Equal([new MusicBrainzReleaseId("rel-lateralus-cd"), new MusicBrainzReleaseId("rel-lateralus-vinyl")], album.ReleaseIds);
 		Assert.Equal("Lateralus", album.Title);
 		Assert.Equal(2001, album.Year);
 		Assert.False(album.IsCompilation);
@@ -54,20 +52,17 @@ public class MusicBrainzDiscographySourceTests
 		var album = await Source().GetAlbum(new MusicBrainzReleaseId("rel-missing"), CancellationToken.None);
 
 		Assert.Null(album);
-		_client.Verify(client => client.BrowseReleases(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
 	}
 
 	[Fact]
-	public async Task GetAlbum_by_release_group_returns_the_group_and_every_release_in_it()
+	public async Task GetAlbum_by_release_group_returns_the_group()
 	{
 		_client.Setup(client => client.GetReleaseGroup("rg-lateralus", It.IsAny<CancellationToken>())).ReturnsAsync(Lateralus);
-		SetupReleases("rg-lateralus", "rel-lateralus-cd", "rel-lateralus-vinyl");
 
 		var album = await Source().GetAlbum(new MusicBrainzReleaseGroupId("rg-lateralus"), CancellationToken.None);
 
 		Assert.NotNull(album);
 		Assert.Equal(new MusicBrainzReleaseGroupId("rg-lateralus"), album.ReleaseGroupId);
-		Assert.Equal([new MusicBrainzReleaseId("rel-lateralus-cd"), new MusicBrainzReleaseId("rel-lateralus-vinyl")], album.ReleaseIds);
 	}
 
 	[Fact]
@@ -81,21 +76,6 @@ public class MusicBrainzDiscographySourceTests
 	}
 
 	[Fact]
-	public async Task GetAlbum_pages_releases_until_a_short_page()
-	{
-		_client.Setup(client => client.GetReleaseGroup("rg-lateralus", It.IsAny<CancellationToken>())).ReturnsAsync(Lateralus);
-		SetupReleases("rg-lateralus", "1", "2", "3", "4", "5");
-
-		var album = await Source(pageSize: 2).GetAlbum(new MusicBrainzReleaseGroupId("rg-lateralus"), CancellationToken.None);
-
-		Assert.Equal(["1", "2", "3", "4", "5"], album!.ReleaseIds.Select(id => id.Value));
-		_client.Verify(client => client.BrowseReleases("rg-lateralus", 2, 0, It.IsAny<CancellationToken>()), Times.Once);
-		_client.Verify(client => client.BrowseReleases("rg-lateralus", 2, 2, It.IsAny<CancellationToken>()), Times.Once);
-		_client.Verify(client => client.BrowseReleases("rg-lateralus", 2, 4, It.IsAny<CancellationToken>()), Times.Once);
-		_client.Verify(client => client.BrowseReleases(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Exactly(3));
-	}
-
-	[Fact]
 	public async Task GetAlbum_maps_credits_in_order_and_an_empty_disambiguation_to_null()
 	{
 		var split = Lateralus with
@@ -103,7 +83,6 @@ public class MusicBrainzDiscographySourceTests
 			ArtistCredit = [new ArtistCredit { Name = "Tool", Artist = Tool }, new ArtistCredit { Name = "Puscifer", Artist = Puscifer }],
 		};
 		_client.Setup(client => client.GetReleaseGroup("rg-lateralus", It.IsAny<CancellationToken>())).ReturnsAsync(split);
-		SetupReleases("rg-lateralus");
 
 		var album = await Source().GetAlbum(new MusicBrainzReleaseGroupId("rg-lateralus"), CancellationToken.None);
 
@@ -121,7 +100,6 @@ public class MusicBrainzDiscographySourceTests
 		var variousArtists = new Artist { Id = "89ad4ac3-39f7-470e-963a-56509c546377", Name = "Various Artists" };
 		_client.Setup(client => client.GetReleaseGroup("rg-lateralus", It.IsAny<CancellationToken>()))
 			.ReturnsAsync(Lateralus with { ArtistCredit = [new ArtistCredit { Name = "Various Artists", Artist = variousArtists }] });
-		SetupReleases("rg-lateralus");
 
 		var album = await Source().GetAlbum(new MusicBrainzReleaseGroupId("rg-lateralus"), CancellationToken.None);
 
@@ -138,7 +116,6 @@ public class MusicBrainzDiscographySourceTests
 	{
 		_client.Setup(client => client.GetReleaseGroup("rg-lateralus", It.IsAny<CancellationToken>()))
 			.ReturnsAsync(Lateralus with { FirstReleaseDate = firstReleaseDate });
-		SetupReleases("rg-lateralus");
 
 		var album = await Source().GetAlbum(new MusicBrainzReleaseGroupId("rg-lateralus"), CancellationToken.None);
 
@@ -169,19 +146,17 @@ public class MusicBrainzDiscographySourceTests
 	}
 
 	[Fact]
-	public async Task SearchAlbums_maps_each_release_group_with_the_releases_it_came_with()
+	public async Task SearchAlbums_maps_each_release_group()
 	{
 		SetupReleaseGroupSearch(
-			Lateralus with { Releases = [Release("rel-lateralus-cd"), Release("rel-lateralus-vinyl")] },
-			Lateralus with { Id = "rg-lateralus-single", FirstReleaseDate = "2002-02", Releases = null });
+			Lateralus,
+			Lateralus with { Id = "rg-lateralus-single", FirstReleaseDate = "2002-02" });
 
 		var albums = await Source().SearchAlbums(new MusicBrainzArtistId("mb-tool"), "Lateralus", CancellationToken.None);
 
 		Assert.Equal(2, albums.Count);
 		Assert.Equal(new MusicBrainzReleaseGroupId("rg-lateralus"), albums[0].ReleaseGroupId);
-		Assert.Equal([new MusicBrainzReleaseId("rel-lateralus-cd"), new MusicBrainzReleaseId("rel-lateralus-vinyl")], albums[0].ReleaseIds);
 		Assert.Equal(new MusicBrainzReleaseGroupId("rg-lateralus-single"), albums[1].ReleaseGroupId);
-		Assert.Empty(albums[1].ReleaseIds);
 		Assert.Equal(2002, albums[1].Year);
 	}
 
@@ -244,14 +219,13 @@ public class MusicBrainzDiscographySourceTests
 	}
 
 	[Fact]
-	public async Task GetArtistAlbums_maps_each_release_group_without_releases()
+	public async Task GetArtistAlbums_maps_each_release_group()
 	{
 		_client.Setup(client => client.BrowseReleaseGroups("mb-tool", It.IsAny<IReadOnlyList<string>>(), It.IsAny<int>(), 0, It.IsAny<CancellationToken>())).ReturnsAsync([Lateralus]);
 
 		var album = Assert.Single(await Source().GetArtistAlbums(new MusicBrainzArtistId("mb-tool"), CancellationToken.None));
 
 		Assert.Equal(new MusicBrainzReleaseGroupId("rg-lateralus"), album.ReleaseGroupId);
-		Assert.Empty(album.ReleaseIds);
 		Assert.Equal(2001, album.Year);
 		Assert.Equal([new DiscographyArtist(new MusicBrainzArtistId("mb-tool"), "Tool", "American rock band")], album.Artists);
 	}
@@ -290,12 +264,6 @@ public class MusicBrainzDiscographySourceTests
 	private static Release Release(string id)
 	{
 		return new Release { Id = id, Title = "Lateralus" };
-	}
-
-	private void SetupReleases(string releaseGroupId, params string[] releaseIds)
-	{
-		_client.Setup(client => client.BrowseReleases(releaseGroupId, It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
-			.ReturnsAsync((string _, int limit, int offset, CancellationToken _) => releaseIds.Skip(offset).Take(limit).Select(Release).ToList());
 	}
 
 	private void SetupReleaseGroupSearch(params ReleaseGroup[] releaseGroups)
