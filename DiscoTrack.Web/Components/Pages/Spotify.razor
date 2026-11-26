@@ -1,0 +1,64 @@
+@page "/spotify"
+@inject IListeningConnection Connection
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+<PageTitle>Spotify</PageTitle>
+
+<h1>Spotify</h1>
+
+@if (!Connection.IsConfigured)
+{
+	<p>Spotify is not configured. Set Spotify:ClientId, Spotify:ClientSecret and Spotify:RedirectUri.</p>
+}
+else if (_loading)
+{
+	<p>Loading</p>
+}
+else
+{
+	<p>status: @(_connected ? "connected" : "not connected")</p>
+
+	@if (_failure is not null)
+	{
+		<p>Connection failed: @_failure</p>
+	}
+
+	<button @onclick="Connect">@(_connected ? "Reconnect Spotify" : "Connect Spotify")</button>
+	@if (_connected)
+	{
+		<button @onclick="Disconnect">Disconnect</button>
+	}
+}
+
+@code {
+	[SupplyParameterFromQuery(Name = "failure")]
+	public string? Failure { get; set; }
+
+	private bool _loading = true;
+	private bool _connected;
+	private string? _failure;
+
+	protected override async Task OnInitializedAsync()
+	{
+		_failure = Failure;
+
+		if (Connection.IsConfigured)
+		{
+			_connected = await Connection.IsConnected(CancellationToken.None);
+		}
+
+		_loading = false;
+	}
+
+	private void Connect()
+	{
+		Navigation.NavigateTo(Connection.StartAuthorisation(), forceLoad: true);
+	}
+
+	private async Task Disconnect()
+	{
+		await Connection.Disconnect(CancellationToken.None);
+		_connected = false;
+	}
+}
