@@ -195,7 +195,7 @@ internal static class Extensions
 		};
 	}
 
-	private static ExternalId ToExternalId(string provider, string value)
+	public static ExternalId ToExternalId(string provider, string value)
 	{
 		return Enum.Parse<Provider>(provider) switch
 		{
@@ -204,6 +204,9 @@ internal static class Extensions
 			Provider.MusicBrainzRelease => new MusicBrainzReleaseId(value),
 			Provider.MusicBrainzReleaseGroup => new MusicBrainzReleaseGroupId(value),
 			Provider.MusicBrainzRecording => new MusicBrainzRecordingId(value),
+			Provider.SpotifyArtist => new SpotifyArtistId(value),
+			Provider.SpotifyAlbum => new SpotifyAlbumId(value),
+			Provider.SpotifyTrack => new SpotifyTrackId(value),
 			_ => throw new ArgumentOutOfRangeException(nameof(provider), provider, null),
 		};
 	}

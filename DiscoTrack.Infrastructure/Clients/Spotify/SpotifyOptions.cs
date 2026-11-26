@@ -11,6 +11,7 @@ public class SpotifyOptions
 	public string RedirectUri { get; set; } = "";
 
 	public string AccountsBaseUrl { get; set; } = "https://accounts.spotify.com/";
+	public string ApiBaseUrl { get; set; } = "https://api.spotify.com/v1/";
 
 	public bool IsConfigured
 		=> ClientId.Length > 0 && ClientSecret.Length > 0 && RedirectUri.Length > 0;

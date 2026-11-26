@@ -1,0 +1,49 @@
+{
+  "items": [
+    {
+      "track": {
+        "album": {
+          "album_type": "album",
+          "id": "4LqcOTZN8DXzvzizsRjv9v",
+          "name": "Immersion",
+          "release_date": "2010-05-21",
+          "type": "album",
+          "artists": [{ "id": "7MqnCTCAX6SsIYYdJCQj9B", "name": "Pendulum", "type": "artist" }]
+        },
+        "artists": [
+          { "id": "7MqnCTCAX6SsIYYdJCQj9B", "name": "Pendulum", "type": "artist" },
+          { "id": "57ylwQTnFnIhJh4nu4rxCs", "name": "In Flames", "type": "artist" }
+        ],
+        "disc_number": 1,
+        "duration_ms": 285000,
+        "explicit": false,
+        "external_ids": { "isrc": "GBAHT1000190" },
+        "id": "6tC2iHfUlzB2W4ntXXL2BH",
+        "is_local": false,
+        "name": "Self vs Self",
+        "track_number": 12,
+        "type": "track"
+      },
+      "played_at": "2026-11-26T22:14:05.123Z",
+      "context": { "type": "album", "uri": "spotify:album:4LqcOTZN8DXzvzizsRjv9v" }
+    },
+    {
+      "track": {
+        "album": { "id": null, "name": "Home Recordings" },
+        "artists": [{ "id": null, "name": "A Friend" }],
+        "duration_ms": 120000,
+        "external_ids": {},
+        "id": null,
+        "is_local": true,
+        "name": "Demo",
+        "type": "track"
+      },
+      "played_at": "2026-11-26T22:09:00.000Z",
+      "context": null
+    }
+  ],
+  "next": "https://api.spotify.com/v1/me/player/recently-played?before=1795731000000&limit=50",
+  "cursors": { "after": "1795731245123", "before": "1795731000000" },
+  "limit": 50,
+  "href": "https://api.spotify.com/v1/me/player/recently-played?limit=50"
+}

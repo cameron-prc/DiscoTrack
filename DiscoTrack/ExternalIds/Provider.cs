@@ -7,4 +7,7 @@ public enum Provider
 	MusicBrainzRelease,
 	MusicBrainzReleaseGroup,
 	MusicBrainzRecording,
+	SpotifyArtist,
+	SpotifyAlbum,
+	SpotifyTrack,
 }
