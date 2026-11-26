@@ -7,7 +7,11 @@
       "title": "Lateralus",
       "status": "Official",
       "date": "2001-05-14",
-      "country": "DE"
+      "country": "DE",
+      "media": [
+        { "position": 1, "format": "CD", "track-count": 13, "track-offset": 0 },
+        { "position": 2, "format": "DVD", "track-count": 2, "track-offset": 0 }
+      ]
     },
     {
       "id": "579278d5-75dc-4d2f-a5f3-6cc86f6c510e",

@@ -51,6 +51,140 @@ public class MusicBrainzDiscographySourceTests
 	}
 
 	[Fact]
+	public async Task GetAlbum_by_release_returns_the_releases_tracks_across_its_discs()
+	{
+		_client.Setup(client => client.GetRelease("rel-lateralus-cd", It.IsAny<CancellationToken>()))
+			.ReturnsAsync(Release("rel-lateralus-cd") with
+			{
+				ReleaseGroup = Lateralus,
+				Media =
+				[
+					Medium(1, Track(1, "The Grudge", "rec-grudge", 516000, Tool), Track(2, "Schism", "rec-schism", null, Tool, Puscifer) with { Recording = new Recording { Id = "rec-schism", Length = 407000, ArtistCredit = [Credit(Tool), Credit(Puscifer)] } }),
+					Medium(2, Track(1, "Bonus", "rec-bonus", null)),
+				],
+			});
+
+		var album = await Source().GetAlbum(new MusicBrainzReleaseId("rel-lateralus-cd"), CancellationToken.None);
+
+		Assert.Equal(
+			[
+				(1, 1, "The Grudge", (ExternalId)new MusicBrainzRecordingId("rec-grudge"), (int?)516000),
+				(1, 2, "Schism", new MusicBrainzRecordingId("rec-schism"), 407000),
+				(2, 1, "Bonus", new MusicBrainzRecordingId("rec-bonus"), null),
+			],
+			album!.Tracks!.Select(track => (track.DiscNumber, track.Position, track.Title, track.RecordingId, track.LengthMs)));
+		Assert.Equal(
+			[new DiscographyArtist(new MusicBrainzArtistId("mb-tool"), "Tool", "American rock band"), new DiscographyArtist(new MusicBrainzArtistId("mb-puscifer"), "Puscifer", null)],
+			album.Tracks![1].Artists);
+		Assert.Empty(album.Tracks[2].Artists);
+	}
+
+	[Fact]
+	public async Task GetAlbum_by_release_group_returns_no_tracks()
+	{
+		_client.Setup(client => client.GetReleaseGroup("rg-lateralus", It.IsAny<CancellationToken>())).ReturnsAsync(Lateralus);
+
+		var album = await Source().GetAlbum(new MusicBrainzReleaseGroupId("rg-lateralus"), CancellationToken.None);
+
+		Assert.Null(album!.Tracks);
+	}
+
+	[Fact]
+	public async Task GetAlbumTracks_by_release_returns_its_tracks_and_nothing_when_it_is_not_found()
+	{
+		_client.Setup(client => client.GetRelease("rel-lateralus-cd", It.IsAny<CancellationToken>()))
+			.ReturnsAsync(Release("rel-lateralus-cd") with { Media = [Medium(1, Track(1, "The Grudge", "rec-grudge", 516000, Tool))] });
+		_client.Setup(client => client.GetRelease("rel-missing", It.IsAny<CancellationToken>())).ReturnsAsync((Release?)null);
+
+		var tracks = await Source().GetAlbumTracks(new MusicBrainzReleaseId("rel-lateralus-cd"), CancellationToken.None);
+		var missing = await Source().GetAlbumTracks(new MusicBrainzReleaseId("rel-missing"), CancellationToken.None);
+
+		Assert.Equal("The Grudge", Assert.Single(tracks).Title);
+		Assert.Empty(missing);
+	}
+
+	[Fact]
+	public async Task GetAlbumTracks_by_release_group_takes_the_earliest_official_release()
+	{
+		SetupReleases(
+			Browsed("rel-bootleg", "Bootleg", "2001-01-01", 13),
+			Browsed("rel-reissue", "Official", "2019-08-02", 13),
+			Browsed("rel-first", "Official", "2001-05-14", 13),
+			Browsed("rel-undated", "Official", null, 13));
+
+		var tracks = await Source().GetAlbumTracks(new MusicBrainzReleaseGroupId("rg-lateralus"), CancellationToken.None);
+
+		Assert.Equal("From rel-first", Assert.Single(tracks).Title);
+		_client.Verify(client => client.BrowseReleases("rg-lateralus", 100, 0, It.IsAny<CancellationToken>()), Times.Once);
+		_client.Verify(client => client.GetRelease(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
+	}
+
+	[Fact]
+	public async Task GetAlbumTracks_by_release_group_splits_releases_of_the_same_date_by_the_most_common_track_count()
+	{
+		SetupReleases(
+			Browsed("rel-a-japan", "Official", "2001-05-14", 15),
+			Browsed("rel-b-europe", "Official", "2001-05-14", 13),
+			Browsed("rel-c-usa", "Official", "2001-05-14", 13));
+
+		var tracks = await Source().GetAlbumTracks(new MusicBrainzReleaseGroupId("rg-lateralus"), CancellationToken.None);
+
+		Assert.Equal("From rel-b-europe", Assert.Single(tracks).Title);
+	}
+
+	[Fact]
+	public async Task GetAlbumTracks_by_release_group_falls_back_to_any_release_when_none_is_official()
+	{
+		SetupReleases(Browsed("rel-promo", "Promotion", "2001-04-01", 13));
+
+		var tracks = await Source().GetAlbumTracks(new MusicBrainzReleaseGroupId("rg-lateralus"), CancellationToken.None);
+
+		Assert.Equal("From rel-promo", Assert.Single(tracks).Title);
+	}
+
+	[Fact]
+	public async Task GetAlbumTracks_by_release_group_returns_nothing_when_the_group_has_no_releases()
+	{
+		SetupReleases();
+
+		var tracks = await Source().GetAlbumTracks(new MusicBrainzReleaseGroupId("rg-lateralus"), CancellationToken.None);
+
+		Assert.Empty(tracks);
+		_client.Verify(client => client.GetRelease(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+	}
+
+	private void SetupReleases(params Release[] releases)
+	{
+		_client.Setup(client => client.BrowseReleases("rg-lateralus", It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>())).ReturnsAsync(releases);
+
+		foreach (var release in releases)
+		{
+			_client.Setup(client => client.GetRelease(release.Id, It.IsAny<CancellationToken>()))
+				.ReturnsAsync(release with { Media = [Medium(1, Track(1, $"From {release.Id}", "rec-1", null))] });
+		}
+	}
+
+	private static Release Browsed(string id, string status, string? date, int trackCount)
+	{
+		return new Release { Id = id, Title = "Lateralus", Status = status, Date = date, Media = [new Medium { Position = 1, TrackCount = trackCount }] };
+	}
+
+	private static Medium Medium(int position, params Track[] tracks)
+	{
+		return new Medium { Position = position, TrackCount = tracks.Length, Tracks = tracks };
+	}
+
+	private static Track Track(int position, string title, string recordingId, int? length, params Artist[] artists)
+	{
+		return new Track { Position = position, Title = title, Length = length, Recording = new Recording { Id = recordingId, ArtistCredit = artists.Select(Credit).ToList() } };
+	}
+
+	private static ArtistCredit Credit(Artist artist)
+	{
+		return new ArtistCredit { Name = artist.Name, Artist = artist };
+	}
+
+	[Fact]
 	public async Task GetAlbum_by_release_returns_null_when_the_release_is_not_found()
 	{
 		_client.Setup(client => client.GetRelease("rel-missing", It.IsAny<CancellationToken>())).ReturnsAsync((Release?)null);

@@ -7,4 +7,5 @@ public record DiscographyAlbum(
 	string Title,
 	int? Year,
 	bool IsCompilation,
-	IReadOnlyList<DiscographyArtist> Artists);
+	IReadOnlyList<DiscographyArtist> Artists,
+	IReadOnlyList<DiscographyTrack>? Tracks = null);

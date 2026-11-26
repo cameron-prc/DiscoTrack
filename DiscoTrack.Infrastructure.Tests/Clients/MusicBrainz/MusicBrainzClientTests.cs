@@ -18,7 +18,7 @@ public class MusicBrainzClientTests
 	}
 
 	[Fact]
-	public async Task GetRelease_requests_the_release_with_its_group_and_credits()
+	public async Task GetRelease_requests_the_release_with_its_group_credits_and_tracklist()
 	{
 		_http.WhenPathContains("release/", Fixtures.Read("musicbrainz/release.json"));
 
@@ -26,7 +26,7 @@ public class MusicBrainzClientTests
 
 		var request = _http.Requests.Single().RequestUri!;
 		Assert.Equal($"/ws/2/release/{LateralusReleaseId}", request.AbsolutePath);
-		Assert.Equal("?inc=release-groups+artist-credits&fmt=json", request.Query);
+		Assert.Equal("?inc=release-groups+artist-credits+recordings&fmt=json", request.Query);
 	}
 
 	[Fact]
@@ -44,6 +44,29 @@ public class MusicBrainzClientTests
 		var credit = Assert.Single(release.ReleaseGroup.ArtistCredit!);
 		Assert.Equal(ToolId, credit.Artist.Id);
 		Assert.Equal("American rock band", credit.Artist.Disambiguation);
+	}
+
+	[Fact]
+	public async Task GetRelease_returns_the_tracklist_as_deserialised()
+	{
+		_http.WhenPathContains("release/", Fixtures.Read("musicbrainz/release.json"));
+
+		var release = await Client().GetRelease(LateralusReleaseId, CancellationToken.None);
+
+		Assert.Equal("Official", release!.Status);
+		Assert.Equal("2019-08-02", release.Date);
+		var medium = Assert.Single(release.Media!);
+		Assert.Equal(1, medium.Position);
+		Assert.Equal(2, medium.TrackCount);
+		Assert.Equal(["The Grudge", "Eon Blue Apocalypse"], medium.Tracks!.Select(track => track.Title));
+		var grudge = medium.Tracks![0];
+		Assert.Equal(1, grudge.Position);
+		Assert.Equal(516000, grudge.Length);
+		Assert.Equal("f2d2a5f1-0000-4000-8000-00000000000a", grudge.Recording.Id);
+		Assert.Equal(515000, grudge.Recording.Length);
+		Assert.Equal(ToolId, Assert.Single(grudge.Recording.ArtistCredit!).Artist.Id);
+		Assert.Null(medium.Tracks[1].Length);
+		Assert.Null(medium.Tracks[1].Recording.ArtistCredit);
 	}
 
 	[Fact]
@@ -136,6 +159,7 @@ public class MusicBrainzClientTests
 		var query = HttpUtility.ParseQueryString(request.Query);
 		Assert.Equal("/ws/2/release", request.AbsolutePath);
 		Assert.Equal(LateralusReleaseGroupId, query["release-group"]);
+		Assert.Equal("media", query["inc"]);
 		Assert.Equal("3", query["limit"]);
 		Assert.Equal("6", query["offset"]);
 		Assert.Equal("json", query["fmt"]);
@@ -151,6 +175,10 @@ public class MusicBrainzClientTests
 		Assert.Equal(3, releases.Count);
 		Assert.Equal("451df9bc-1ba2-453c-9c60-9537a5f3c6e3", releases[0].Id);
 		Assert.All(releases, release => Assert.Equal("Lateralus", release.Title));
+		Assert.Equal("Official", releases[0].Status);
+		Assert.Equal("2001-05-14", releases[0].Date);
+		Assert.Equal([13, 2], releases[0].Media!.Select(medium => medium.TrackCount));
+		Assert.Null(releases[1].Media);
 	}
 
 	[Fact]

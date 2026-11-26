@@ -20,6 +20,24 @@ internal static class Extensions
 			credits.Select(credit => credit.ToDiscographyArtist()).ToList());
 	}
 
+	public static IReadOnlyList<DiscographyTrack> ToDiscographyTracks(this Release release)
+	{
+		return (release.Media ?? [])
+			.SelectMany(medium => (medium.Tracks ?? []).Select(track => new DiscographyTrack(
+				new MusicBrainzRecordingId(track.Recording.Id),
+				track.Title,
+				medium.Position,
+				track.Position,
+				track.Length ?? track.Recording.Length,
+				(track.Recording.ArtistCredit ?? []).Select(credit => credit.ToDiscographyArtist()).ToList())))
+			.ToList();
+	}
+
+	public static int TrackCount(this Release release)
+	{
+		return (release.Media ?? []).Sum(medium => medium.TrackCount);
+	}
+
 	public static DiscographyArtist ToDiscographyArtist(this ArtistCredit credit)
 	{
 		return credit.Artist.ToDiscographyArtist();

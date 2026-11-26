@@ -17,7 +17,7 @@ public class MusicBrainzClient(HttpClient http) : IMusicBrainzClient
 
 	public Task<Release?> GetRelease(string id, CancellationToken ct)
 	{
-		return Get<Release>($"{MusicBrainzRoutes.Release}/{Uri.EscapeDataString(id)}?inc=release-groups+artist-credits&fmt={JsonFormat}", ct);
+		return Get<Release>($"{MusicBrainzRoutes.Release}/{Uri.EscapeDataString(id)}?inc=release-groups+artist-credits+recordings&fmt={JsonFormat}", ct);
 	}
 
 	public Task<ReleaseGroup?> GetReleaseGroup(string id, CancellationToken ct)
@@ -32,7 +32,11 @@ public class MusicBrainzClient(HttpClient http) : IMusicBrainzClient
 
 	public async Task<IReadOnlyList<Release>> BrowseReleases(string releaseGroupId, int limit, int offset, CancellationToken ct)
 	{
-		var query = new Dictionary<string, string> { ["release-group"] = releaseGroupId };
+		var query = new Dictionary<string, string>
+		{
+			["release-group"] = releaseGroupId,
+			["inc"] = "media",
+		};
 
 		var response = await Get<ReleaseBrowseResponse>(BuildListUrl(MusicBrainzRoutes.Release, query, limit, offset), ct);
 

@@ -9,6 +9,8 @@ namespace DiscoTrack.Infrastructure.Discography;
 
 public partial class MusicBrainzDiscographySource(IMusicBrainzClient client, IOptions<MusicBrainzOptions> options) : IDiscographySource
 {
+	private const string OfficialStatus = "Official";
+
 	private static readonly IReadOnlyList<string> StudioAlbumTypes = ["album", "ep"];
 
 	private readonly int _pageSize = options.Value.PageSize;
@@ -28,6 +30,11 @@ public partial class MusicBrainzDiscographySource(IMusicBrainzClient client, IOp
 	public Provider ArtistProvider
 	{
 		get { return Provider.MusicBrainzArtist; }
+	}
+
+	public Provider RecordingProvider
+	{
+		get { return Provider.MusicBrainzRecording; }
 	}
 
 	public ExternalId VariousArtistsId
@@ -53,12 +60,46 @@ public partial class MusicBrainzDiscographySource(IMusicBrainzClient client, IOp
 			return null;
 		}
 
-		return release.ReleaseGroup.ToDiscographyAlbum();
+		return release.ReleaseGroup.ToDiscographyAlbum() with { Tracks = release.ToDiscographyTracks() };
 	}
 
 	private async Task<DiscographyAlbum?> GetAlbum(MusicBrainzReleaseGroupId releaseGroupId, CancellationToken ct)
 	{
 		return (await client.GetReleaseGroup(releaseGroupId.Value, ct))?.ToDiscographyAlbum();
+	}
+
+	public Task<IReadOnlyList<DiscographyTrack>> GetAlbumTracks(ExternalId id, CancellationToken ct)
+	{
+		return id switch
+		{
+			MusicBrainzReleaseId releaseId => GetAlbumTracks(releaseId, ct),
+			MusicBrainzReleaseGroupId releaseGroupId => GetAlbumTracks(releaseGroupId, ct),
+			_ => throw new ArgumentException($"{id.Provider} is not a MusicBrainz release or release group id", nameof(id)),
+		};
+	}
+
+	private async Task<IReadOnlyList<DiscographyTrack>> GetAlbumTracks(MusicBrainzReleaseId releaseId, CancellationToken ct)
+	{
+		return (await client.GetRelease(releaseId.Value, ct))?.ToDiscographyTracks() ?? [];
+	}
+
+	// A release group has no tracklist of its own, so take the one of its earliest official release.
+	// Releases out on the same date are split by the track count most of the group's releases share.
+	private async Task<IReadOnlyList<DiscographyTrack>> GetAlbumTracks(MusicBrainzReleaseGroupId releaseGroupId, CancellationToken ct)
+	{
+		var releases = await client.BrowseReleases(releaseGroupId.Value, _pageSize, 0, ct);
+		var officialReleases = releases.Where(release => release.Status == OfficialStatus).ToList();
+		var candidates = officialReleases.Count > 0 ? officialReleases : releases;
+		var releasesByTrackCount = candidates.ToLookup(release => release.TrackCount());
+
+		var chosen = candidates
+			.OrderBy(release => string.IsNullOrEmpty(release.Date))
+			.ThenBy(release => release.Date, StringComparer.Ordinal)
+			.ThenByDescending(release => releasesByTrackCount[release.TrackCount()].Count())
+			.ThenBy(release => release.Id, StringComparer.Ordinal)
+			.FirstOrDefault();
+
+		return chosen is null ? [] : await GetAlbumTracks(new MusicBrainzReleaseId(chosen.Id), ct);
 	}
 
 	public Task<DiscographyArtist?> GetArtist(ExternalId id, CancellationToken ct)
