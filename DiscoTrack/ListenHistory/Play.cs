@@ -1,4 +1,4 @@
-using DiscoTrack.ExternalIds;
+using DiscoTrack.Providers;
 
 namespace DiscoTrack.ListenHistory;
 
@@ -7,18 +7,10 @@ public record Play
 {
 	public PlayId Id { get; init; } = PlayId.New();
 	public required DateTimeOffset PlayedAt { get; init; }
-	public required ExternalId TrackId { get; init; }
-	public required string TrackTitle { get; init; }
-	public string? Isrc { get; init; }
-	public int? DurationMs { get; init; }
-	public int? DiscNumber { get; init; }
-	public int? TrackNumber { get; init; }
-	public IReadOnlyList<PlayArtist> Artists { get; init; } = [];
-	public ExternalId? AlbumId { get; init; }
-	public string? AlbumTitle { get; init; }
+	public required ProviderTrack Track { get; init; }
 
-	public override string ToString()
+	public sealed override string ToString()
 	{
-		return $"{TrackTitle} at {PlayedAt:O} ({Id})";
+		return $"{Track.Title} at {PlayedAt:O} ({Id})";
 	}
 }

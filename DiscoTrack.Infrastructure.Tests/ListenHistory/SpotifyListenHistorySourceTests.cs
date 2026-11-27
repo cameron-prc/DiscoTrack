@@ -3,6 +3,7 @@ using DiscoTrack.Infrastructure.Clients.Spotify;
 using DiscoTrack.Infrastructure.Clients.Spotify.Models;
 using DiscoTrack.Infrastructure.ListenHistory;
 using DiscoTrack.ListenHistory;
+using DiscoTrack.Providers;
 using Moq;
 
 namespace DiscoTrack.Infrastructure.Tests.ListenHistory;
@@ -67,14 +68,14 @@ public class SpotifyListenHistorySourceTests
 		var play = Assert.Single(await Source().GetPlays(null, CancellationToken.None));
 
 		Assert.Equal(PlayedAt, play.PlayedAt);
-		Assert.Equal(new SpotifyTrackId("trk-self"), play.TrackId);
-		Assert.Equal("Self vs Self", play.TrackTitle);
-		Assert.Equal("GBAHT1000190", play.Isrc);
-		Assert.Equal(285000, play.DurationMs);
-		Assert.Equal((1, 12), (play.DiscNumber, play.TrackNumber));
-		Assert.Equal([new PlayArtist(new SpotifyArtistId("art-pendulum"), "Pendulum"), new PlayArtist(new SpotifyArtistId("art-in-flames"), "In Flames")], play.Artists);
-		Assert.Equal(new SpotifyAlbumId("alb-immersion"), play.AlbumId);
-		Assert.Equal("Immersion", play.AlbumTitle);
+		Assert.Equal(new SpotifyTrackId("trk-self"), play.Track.Id);
+		Assert.Equal("Self vs Self", play.Track.Title);
+		Assert.Equal("GBAHT1000190", play.Track.Isrc);
+		Assert.Equal(285000, play.Track.DurationMs);
+		Assert.Equal((1, 12), (play.Track.DiscNumber, play.Track.TrackNumber));
+		Assert.Equal([new ProviderArtist(new SpotifyArtistId("art-pendulum"), "Pendulum"), new ProviderArtist(new SpotifyArtistId("art-in-flames"), "In Flames")], play.Track.Artists);
+		Assert.Equal(new SpotifyAlbumId("alb-immersion"), play.Track.AlbumId);
+		Assert.Equal("Immersion", play.Track.AlbumTitle);
 	}
 
 	[Fact]
@@ -86,7 +87,7 @@ public class SpotifyListenHistorySourceTests
 
 		var play = Assert.Single(await Source().GetPlays(null, CancellationToken.None));
 
-		Assert.Equal("Genesis", play.TrackTitle);
+		Assert.Equal("Genesis", play.Track.Title);
 	}
 
 	[Fact]
@@ -106,9 +107,9 @@ public class SpotifyListenHistorySourceTests
 
 		var play = Assert.Single(await Source().GetPlays(null, CancellationToken.None));
 
-		Assert.Null(play.Isrc);
-		Assert.Empty(play.Artists);
-		Assert.Null(play.AlbumId);
-		Assert.Equal("Bootleg", play.AlbumTitle);
+		Assert.Null(play.Track.Isrc);
+		Assert.Empty(play.Track.Artists);
+		Assert.Null(play.Track.AlbumId);
+		Assert.Equal("Bootleg", play.Track.AlbumTitle);
 	}
 }

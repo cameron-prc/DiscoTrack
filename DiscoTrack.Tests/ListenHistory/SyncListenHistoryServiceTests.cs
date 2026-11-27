@@ -1,5 +1,6 @@
 using DiscoTrack.ExternalIds;
 using DiscoTrack.ListenHistory;
+using DiscoTrack.Providers;
 using DiscoTrack.ListenHistory.SyncListenHistory;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
@@ -103,6 +104,6 @@ public class SyncListenHistoryServiceTests
 
 	private static Play Play(string trackId, DateTimeOffset playedAt)
 	{
-		return new Play { PlayedAt = playedAt, TrackId = new SpotifyTrackId(trackId), TrackTitle = trackId };
+		return new Play { PlayedAt = playedAt, Track = new ProviderTrack { Id = new SpotifyTrackId(trackId), Title = trackId } };
 	}
 }

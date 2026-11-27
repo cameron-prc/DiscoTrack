@@ -37,9 +37,9 @@ else
 			{
 				<tr>
 					<td>@play.PlayedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
-					<td>@play.TrackTitle</td>
-					<td>@string.Join(", ", play.Artists.Select(artist => artist.Name))</td>
-					<td>@play.AlbumTitle</td>
+					<td>@play.Track.Title</td>
+					<td>@string.Join(", ", play.Track.Artists.Select(artist => artist.Name))</td>
+					<td>@play.Track.AlbumTitle</td>
 				</tr>
 			}
 		</tbody>

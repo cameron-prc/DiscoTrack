@@ -3,6 +3,7 @@ using Dapper;
 using DiscoTrack.ExternalIds;
 using DiscoTrack.Infrastructure.Sqlite;
 using DiscoTrack.ListenHistory;
+using DiscoTrack.Providers;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Options;
 using static DiscoTrack.Infrastructure.Catalogue.Extensions;
@@ -61,7 +62,7 @@ public class SqliteListenHistory(IOptions<SqliteOptions> options) : IListenHisto
 				continue;
 			}
 
-			await connection.ExecuteAsync(InsertPlayArtist, play.Artists.Select((artist, index) => ToRow(play.Id, index + 1, artist)), transaction);
+			await connection.ExecuteAsync(InsertPlayArtist, play.Track.Artists.Select((artist, index) => ToRow(play.Id, index + 1, artist)), transaction);
 			added.Add(play);
 		}
 
@@ -84,15 +85,18 @@ public class SqliteListenHistory(IOptions<SqliteOptions> options) : IListenHisto
 			{
 				Id = new PlayId(Guid.Parse(play.Id)),
 				PlayedAt = ParsePlayedAt(play.PlayedAt),
-				TrackId = ToExternalId(play.TrackProvider, play.TrackValue),
-				TrackTitle = play.TrackTitle,
-				Isrc = play.Isrc,
-				DurationMs = play.DurationMs,
-				DiscNumber = play.DiscNumber,
-				TrackNumber = play.TrackNumber,
-				Artists = artists[play.Id].Select(artist => new PlayArtist(ToExternalId(artist.Provider, artist.Value), artist.Name)).ToList(),
-				AlbumId = play.AlbumProvider is null || play.AlbumValue is null ? null : ToExternalId(play.AlbumProvider, play.AlbumValue),
-				AlbumTitle = play.AlbumTitle,
+				Track = new ProviderTrack
+				{
+					Id = ToExternalId(play.TrackProvider, play.TrackValue),
+					Title = play.TrackTitle,
+					Isrc = play.Isrc,
+					DurationMs = play.DurationMs,
+					DiscNumber = play.DiscNumber,
+					TrackNumber = play.TrackNumber,
+					Artists = artists[play.Id].Select(artist => new ProviderArtist(ToExternalId(artist.Provider, artist.Value), artist.Name)).ToList(),
+					AlbumId = play.AlbumProvider is null || play.AlbumValue is null ? null : ToExternalId(play.AlbumProvider, play.AlbumValue),
+					AlbumTitle = play.AlbumTitle,
+				},
 			})
 			.ToList();
 	}
@@ -116,20 +120,20 @@ public class SqliteListenHistory(IOptions<SqliteOptions> options) : IListenHisto
 		{
 			Id = play.Id.ToString(),
 			PlayedAt = play.PlayedAt.ToUniversalTime().ToString(PlayedAtFormat, CultureInfo.InvariantCulture),
-			TrackProvider = play.TrackId.Provider.ToString(),
-			TrackValue = play.TrackId.Value,
-			TrackTitle = play.TrackTitle,
-			Isrc = play.Isrc,
-			DurationMs = play.DurationMs,
-			DiscNumber = play.DiscNumber,
-			TrackNumber = play.TrackNumber,
-			AlbumProvider = play.AlbumId?.Provider.ToString(),
-			AlbumValue = play.AlbumId?.Value,
-			AlbumTitle = play.AlbumTitle,
+			TrackProvider = play.Track.Id.Provider.ToString(),
+			TrackValue = play.Track.Id.Value,
+			TrackTitle = play.Track.Title,
+			Isrc = play.Track.Isrc,
+			DurationMs = play.Track.DurationMs,
+			DiscNumber = play.Track.DiscNumber,
+			TrackNumber = play.Track.TrackNumber,
+			AlbumProvider = play.Track.AlbumId?.Provider.ToString(),
+			AlbumValue = play.Track.AlbumId?.Value,
+			AlbumTitle = play.Track.AlbumTitle,
 		};
 	}
 
-	private static PlayArtistRow ToRow(PlayId playId, int position, PlayArtist artist)
+	private static PlayArtistRow ToRow(PlayId playId, int position, ProviderArtist artist)
 	{
 		return new PlayArtistRow
 		{

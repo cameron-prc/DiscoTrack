@@ -5,15 +5,15 @@ using DiscoTrack.Common;
 using DiscoTrack.Discography;
 using DiscoTrack.Discography.SyncAlbumWithDiscography;
 using DiscoTrack.ExternalIds;
-using DiscoTrack.ListenHistory;
-using DiscoTrack.ListenHistory.ResolvePlays;
+using DiscoTrack.Providers;
+using DiscoTrack.Providers.ResolveProviderTracks;
 using DiscoTrack.Tracks;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
-namespace DiscoTrack.Tests.ListenHistory;
+namespace DiscoTrack.Tests.Providers;
 
-public class ResolvePlaysServiceTests
+public class ResolveProviderTracksServiceTests
 {
 	private static readonly SpotifyAlbumId SpotifyImmersion = new("sp-immersion");
 	private static readonly MusicBrainzReleaseId ImmersionRelease = new("rel-immersion");
@@ -30,7 +30,7 @@ public class ResolvePlaysServiceTests
 	private readonly Artist _pendulum = new() { ExternalIds = [new MusicBrainzArtistId("mb-pendulum")], Name = "Pendulum" };
 	private readonly Artist _inFlames = new() { ExternalIds = [new MusicBrainzArtistId("mb-in-flames")], Name = "In Flames" };
 
-	public ResolvePlaysServiceTests()
+	public ResolveProviderTracksServiceTests()
 	{
 		_catalogue.Setup(catalogue => catalogue.GetAlbums(It.IsAny<CancellationToken>())).ReturnsAsync(() => _albums.ToList());
 		_catalogue.Setup(catalogue => catalogue.GetArtists(It.IsAny<CancellationToken>())).ReturnsAsync(() => _artists.ToList());
@@ -81,35 +81,35 @@ public class ResolvePlaysServiceTests
 			});
 	}
 
-	private ResolvePlaysService Resolve()
+	private ResolveProviderTracksService Resolve()
 	{
-		return new ResolvePlaysService(_source.Object, _catalogue.Object, _syncAlbum.Object, NullLogger<ResolvePlaysService>.Instance);
+		return new ResolveProviderTracksService(_source.Object, _catalogue.Object, _syncAlbum.Object, NullLogger<ResolveProviderTracksService>.Instance);
 	}
 
 	[Fact]
-	public async Task Creates_an_untracked_album_from_the_release_the_discography_links_to_the_plays_album_and_syncs_it()
+	public async Task Creates_an_untracked_album_from_the_release_the_discography_links_to_the_providers_album_and_syncs_it()
 	{
 		_source.Setup(source => source.FindLinkedReleases(SpotifyImmersion, It.IsAny<CancellationToken>())).ReturnsAsync([ImmersionRelease]);
-		var play = Play("sp-genesis", "Genesis", 1, 1);
+		var listed = Listed("sp-genesis", "Genesis", 1, 1);
 
-		var response = (await Resolve().Run([play], CancellationToken.None)).GetRight;
+		var response = (await Resolve().Run([listed], CancellationToken.None)).GetRight;
 
 		var created = Assert.Single(response.CreatedAlbums);
 		Assert.False(created.Tracked);
 		Assert.Equal([ImmersionRelease, SpotifyImmersion], created.ExternalIds);
 		Assert.Equal("Immersion", created.Title);
-		Assert.Equal([play], response.ResolvedPlays);
-		Assert.Empty(response.UnresolvedPlays);
+		Assert.Equal([listed], response.ResolvedTracks);
+		Assert.Empty(response.UnresolvedTracks);
 		_syncAlbum.Verify(sync => sync.Run(created.Id, It.IsAny<CancellationToken>()), Times.Once);
 		_source.Verify(source => source.FindRecordings(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
 	}
 
 	[Fact]
-	public async Task Gives_the_played_track_the_plays_track_id_and_isrc_and_saves_the_albums_tracks()
+	public async Task Gives_the_provider_track_the_providers_track_id_and_isrc_and_saves_the_albums_tracks()
 	{
 		_source.Setup(source => source.FindLinkedReleases(SpotifyImmersion, It.IsAny<CancellationToken>())).ReturnsAsync([ImmersionRelease]);
 
-		var response = (await Resolve().Run([Play("sp-genesis", "Genesis", 1, 1)], CancellationToken.None)).GetRight;
+		var response = (await Resolve().Run([Listed("sp-genesis", "Genesis", 1, 1)], CancellationToken.None)).GetRight;
 
 		var tracks = _tracks[response.CreatedAlbums[0].Id];
 		Assert.Equal([new MusicBrainzRecordingId("rec-genesis"), new SpotifyTrackId("sp-genesis"), GenesisIsrc], tracks[0].ExternalIds);
@@ -118,15 +118,15 @@ public class ResolvePlaysServiceTests
 	}
 
 	[Fact]
-	public async Task Gives_each_play_artist_id_to_the_credited_artist_of_the_same_name_and_saves_it()
+	public async Task Gives_each_provider_artist_id_to_the_credited_artist_of_the_same_name_and_saves_it()
 	{
 		_source.Setup(source => source.FindLinkedReleases(SpotifyImmersion, It.IsAny<CancellationToken>())).ReturnsAsync([ImmersionRelease]);
-		var play = Play("sp-self", "Self vs Self", 1, 12) with
+		var listed = Listed("sp-self", "Self vs Self", 1, 12) with
 		{
-			Artists = [new PlayArtist(new SpotifyArtistId("sp-pendulum"), "Pendulum"), new PlayArtist(new SpotifyArtistId("sp-in-flames"), "In Flames")],
+			Artists = [new ProviderArtist(new SpotifyArtistId("sp-pendulum"), "Pendulum"), new ProviderArtist(new SpotifyArtistId("sp-in-flames"), "In Flames")],
 		};
 
-		await Resolve().Run([play], CancellationToken.None);
+		await Resolve().Run([listed], CancellationToken.None);
 
 		Assert.Equal([new MusicBrainzArtistId("mb-pendulum"), new SpotifyArtistId("sp-pendulum")], _pendulum.ExternalIds);
 		Assert.Equal([new MusicBrainzArtistId("mb-in-flames"), new SpotifyArtistId("sp-in-flames")], _inFlames.ExternalIds);
@@ -138,12 +138,12 @@ public class ResolvePlaysServiceTests
 	{
 		_artists.Add(new Artist { ExternalIds = [new SpotifyArtistId("sp-pendulum")], Name = "Pendulum (elsewhere)" });
 		_source.Setup(source => source.FindLinkedReleases(SpotifyImmersion, It.IsAny<CancellationToken>())).ReturnsAsync([ImmersionRelease]);
-		var play = Play("sp-genesis", "Genesis", 1, 1) with
+		var listed = Listed("sp-genesis", "Genesis", 1, 1) with
 		{
-			Artists = [new PlayArtist(new SpotifyArtistId("sp-pendulum"), "Pendulum"), new PlayArtist(new SpotifyArtistId("sp-stranger"), "A Stranger")],
+			Artists = [new ProviderArtist(new SpotifyArtistId("sp-pendulum"), "Pendulum"), new ProviderArtist(new SpotifyArtistId("sp-stranger"), "A Stranger")],
 		};
 
-		await Resolve().Run([play], CancellationToken.None);
+		await Resolve().Run([listed], CancellationToken.None);
 
 		Assert.Equal([new MusicBrainzArtistId("mb-pendulum")], _pendulum.ExternalIds);
 		Assert.Empty(_savedArtists);
@@ -156,7 +156,7 @@ public class ResolvePlaysServiceTests
 			new DiscographyRelease(new MusicBrainzReleaseId("rel-single"), "Witchcraft", true, "2010-07-18", 4),
 			new DiscographyRelease(ImmersionRelease, "IMMERSION", true, "2010-05-21", 15));
 
-		var response = (await Resolve().Run([Play("sp-genesis", "Genesis", 1, 1)], CancellationToken.None)).GetRight;
+		var response = (await Resolve().Run([Listed("sp-genesis", "Genesis", 1, 1)], CancellationToken.None)).GetRight;
 
 		Assert.Equal([ImmersionRelease, SpotifyImmersion], Assert.Single(response.CreatedAlbums).ExternalIds);
 	}
@@ -171,7 +171,7 @@ public class ResolvePlaysServiceTests
 			new DiscographyRelease(ImmersionRelease, "Immersion", true, "2010-05-21", 15),
 			new DiscographyRelease(new MusicBrainzReleaseId("rel-undated"), "Immersion", true, null, 15));
 
-		var response = (await Resolve().Run([Play("sp-genesis", "Genesis", 1, 1)], CancellationToken.None)).GetRight;
+		var response = (await Resolve().Run([Listed("sp-genesis", "Genesis", 1, 1)], CancellationToken.None)).GetRight;
 
 		Assert.Contains(ImmersionRelease, Assert.Single(response.CreatedAlbums).ExternalIds);
 	}
@@ -180,9 +180,9 @@ public class ResolvePlaysServiceTests
 	public async Task Accepts_a_release_whose_title_the_albums_edition_title_starts_with()
 	{
 		SetupRecordingReleases(new DiscographyRelease(ImmersionRelease, "Immersion", true, "2010-05-21", 15));
-		var play = Play("sp-genesis", "Genesis", 1, 1) with { AlbumTitle = "Immersion (Deluxe Edition)" };
+		var listed = Listed("sp-genesis", "Genesis", 1, 1) with { AlbumTitle = "Immersion (Deluxe Edition)" };
 
-		var response = (await Resolve().Run([play], CancellationToken.None)).GetRight;
+		var response = (await Resolve().Run([listed], CancellationToken.None)).GetRight;
 
 		Assert.Single(response.CreatedAlbums);
 	}
@@ -194,21 +194,21 @@ public class ResolvePlaysServiceTests
 			new DiscographyRelease(new MusicBrainzReleaseId("rel-compilation"), "Drum & Bass Arena", true, "2011-03-01", 40),
 			new DiscographyRelease(new MusicBrainzReleaseId("rel-single"), "Witchcraft", true, "2010-07-18", 4));
 
-		var response = (await Resolve().Run([Play("sp-genesis", "Genesis", 1, 1)], CancellationToken.None)).GetRight;
+		var response = (await Resolve().Run([Listed("sp-genesis", "Genesis", 1, 1)], CancellationToken.None)).GetRight;
 
 		Assert.Equal([new MusicBrainzReleaseId("rel-single"), SpotifyImmersion], Assert.Single(response.CreatedAlbums).ExternalIds);
-		Assert.Single(response.ResolvedPlays);
+		Assert.Single(response.ResolvedTracks);
 	}
 
 	[Fact]
-	public async Task Creates_the_album_its_artist_and_the_played_track_from_the_play_when_the_discography_has_no_release()
+	public async Task Creates_the_album_its_artist_and_the_provider_track_from_the_track_when_the_discography_has_no_release()
 	{
 		SetupRecordingReleases();
-		var play = Play("sp-genesis", "Genesis", 1, 1) with { DurationMs = 69000 };
+		var listed = Listed("sp-genesis", "Genesis", 1, 1) with { DurationMs = 69000 };
 
-		var response = (await Resolve().Run([play], CancellationToken.None)).GetRight;
+		var response = (await Resolve().Run([listed], CancellationToken.None)).GetRight;
 
-		Assert.Equal([play], response.ResolvedPlays);
+		Assert.Equal([listed], response.ResolvedTracks);
 		var album = Assert.Single(response.CreatedAlbums);
 		Assert.Equal([SpotifyImmersion], album.ExternalIds);
 		Assert.Equal("Immersion", album.Title);
@@ -232,11 +232,11 @@ public class ResolvePlaysServiceTests
 		_artists.Add(_pendulum);
 		_syncAlbum.Setup(sync => sync.Run(It.IsAny<AlbumId>(), It.IsAny<CancellationToken>()))
 			.ReturnsAsync(new List<ISyncAlbumWithDiscographyError> { new UnableToFindDiscographyAlbumError() });
-		var play = Play("sp-genesis", "Genesis", 1, 1);
+		var listed = Listed("sp-genesis", "Genesis", 1, 1);
 
-		var response = (await Resolve().Run([play], CancellationToken.None)).GetRight;
+		var response = (await Resolve().Run([listed], CancellationToken.None)).GetRight;
 
-		Assert.Equal([play], response.ResolvedPlays);
+		Assert.Equal([listed], response.ResolvedTracks);
 		var album = Assert.Single(response.CreatedAlbums);
 		Assert.Same(_pendulum, Assert.Single(album.Artists).Artist);
 		Assert.Equal([new MusicBrainzArtistId("mb-pendulum"), new SpotifyArtistId("sp-pendulum")], _pendulum.ExternalIds);
@@ -250,7 +250,7 @@ public class ResolvePlaysServiceTests
 	{
 		_artists.Add(_pendulum);
 
-		var response = (await Resolve().Run([Play("sp-genesis", "Genesis", 1, 1)], CancellationToken.None)).GetRight;
+		var response = (await Resolve().Run([Listed("sp-genesis", "Genesis", 1, 1)], CancellationToken.None)).GetRight;
 
 		var album = Assert.Single(response.CreatedAlbums);
 		Assert.Equal(2010, album.Year);
@@ -264,7 +264,7 @@ public class ResolvePlaysServiceTests
 		var otherPendulum = new Artist { ExternalIds = [new MusicBrainzArtistId("mb-pendulum-70s")], Name = "Pendulum" };
 		_artists.AddRange([_pendulum, otherPendulum]);
 
-		var response = (await Resolve().Run([Play("sp-genesis", "Genesis", 1, 1)], CancellationToken.None)).GetRight;
+		var response = (await Resolve().Run([Listed("sp-genesis", "Genesis", 1, 1)], CancellationToken.None)).GetRight;
 
 		var artist = Assert.Single(response.CreatedAlbums[0].Artists).Artist;
 		Assert.NotSame(_pendulum, artist);
@@ -275,14 +275,14 @@ public class ResolvePlaysServiceTests
 	}
 
 	[Fact]
-	public async Task Credits_a_created_album_to_the_artist_already_holding_the_play_artists_id_without_saving_it()
+	public async Task Credits_a_created_album_to_the_artist_already_holding_the_track_artists_id_without_saving_it()
 	{
 		_pendulum.SetExternalId(new SpotifyArtistId("sp-pendulum"));
 		_artists.Add(_pendulum);
 		_syncAlbum.Setup(sync => sync.Run(It.IsAny<AlbumId>(), It.IsAny<CancellationToken>()))
 			.ReturnsAsync(new List<ISyncAlbumWithDiscographyError> { new UnableToFindDiscographyAlbumError() });
 
-		var response = (await Resolve().Run([Play("sp-genesis", "Genesis", 1, 1)], CancellationToken.None)).GetRight;
+		var response = (await Resolve().Run([Listed("sp-genesis", "Genesis", 1, 1)], CancellationToken.None)).GetRight;
 
 		Assert.Same(_pendulum, Assert.Single(response.CreatedAlbums[0].Artists).Artist);
 		Assert.Empty(_savedArtists);
@@ -292,29 +292,29 @@ public class ResolvePlaysServiceTests
 	public async Task Creates_nothing_when_the_discography_could_not_be_asked()
 	{
 		_source.Setup(source => source.FindRecordings(It.IsAny<string>(), It.IsAny<CancellationToken>())).ThrowsAsync(new InvalidOperationException("busy"));
-		var play = Play("sp-genesis", "Genesis", 1, 1);
+		var listed = Listed("sp-genesis", "Genesis", 1, 1);
 
-		var response = (await Resolve().Run([play], CancellationToken.None)).GetRight;
+		var response = (await Resolve().Run([listed], CancellationToken.None)).GetRight;
 
-		Assert.Equal([play], response.UnresolvedPlays);
+		Assert.Equal([listed], response.UnresolvedTracks);
 		Assert.Empty(response.CreatedAlbums);
 		Assert.Empty(_savedAlbums);
 		Assert.Empty(_savedArtists);
 	}
 
 	[Fact]
-	public async Task Adds_a_played_track_to_an_album_that_has_no_discography_tracklist()
+	public async Task Adds_a_provider_track_to_an_album_that_has_no_discography_tracklist()
 	{
 		var album = new Album { ExternalIds = [SpotifyImmersion], Title = "Immersion", Year = 0 };
 		_albums.Add(album);
 		var genesis = Track(album.Id, 1, 1, "Genesis", _pendulum);
 		genesis.ExternalIds = [new SpotifyTrackId("sp-genesis"), GenesisIsrc];
 		_tracks[album.Id] = [genesis];
-		var play = Play("sp-self", "Self vs Self", 1, 12) with { Isrc = "GBAHT1000193" };
+		var listed = Listed("sp-self", "Self vs Self", 1, 12) with { Isrc = "GBAHT1000193" };
 
-		var response = (await Resolve().Run([play], CancellationToken.None)).GetRight;
+		var response = (await Resolve().Run([listed], CancellationToken.None)).GetRight;
 
-		Assert.Equal([play], response.ResolvedPlays);
+		Assert.Equal([listed], response.ResolvedTracks);
 		Assert.Empty(response.CreatedAlbums);
 		Assert.Equal(["Genesis", "Self vs Self"], _tracks[album.Id].Select(track => track.Title));
 		Assert.Equal([new SpotifyTrackId("sp-self"), new Isrc("GBAHT1000193")], _tracks[album.Id][1].ExternalIds);
@@ -323,13 +323,13 @@ public class ResolvePlaysServiceTests
 	}
 
 	[Fact]
-	public async Task Leaves_a_play_without_an_album_unresolved_without_asking_the_discography()
+	public async Task Leaves_a_track_without_an_album_unresolved_without_asking_the_discography()
 	{
-		var play = Play("sp-genesis", "Genesis", 1, 1) with { AlbumId = null };
+		var listed = Listed("sp-genesis", "Genesis", 1, 1) with { AlbumId = null };
 
-		var response = (await Resolve().Run([play], CancellationToken.None)).GetRight;
+		var response = (await Resolve().Run([listed], CancellationToken.None)).GetRight;
 
-		Assert.Equal([play], response.UnresolvedPlays);
+		Assert.Equal([listed], response.UnresolvedTracks);
 		_source.Verify(source => source.FindLinkedReleases(It.IsAny<ExternalId>(), It.IsAny<CancellationToken>()), Times.Never);
 	}
 
@@ -340,31 +340,31 @@ public class ResolvePlaysServiceTests
 		_albums.Add(owned);
 		_source.Setup(source => source.FindLinkedReleases(SpotifyImmersion, It.IsAny<CancellationToken>())).ReturnsAsync([ImmersionRelease]);
 
-		var response = (await Resolve().Run([Play("sp-genesis", "Genesis", 1, 1)], CancellationToken.None)).GetRight;
+		var response = (await Resolve().Run([Listed("sp-genesis", "Genesis", 1, 1)], CancellationToken.None)).GetRight;
 
 		Assert.Empty(response.CreatedAlbums);
 		Assert.Equal([new SubsonicId("alb-immersion"), ImmersionRelease, SpotifyImmersion], Assert.Single(_savedAlbums).ExternalIds);
 		Assert.Same(owned, _savedAlbums[0]);
-		Assert.Single(response.ResolvedPlays);
+		Assert.Single(response.ResolvedTracks);
 	}
 
 	[Fact]
-	public async Task Resolves_a_play_of_an_album_already_holding_the_provider_id_without_asking_the_discography()
+	public async Task Resolves_a_track_of_an_album_already_holding_the_provider_id_without_asking_the_discography()
 	{
 		var album = new Album { ExternalIds = [ImmersionRelease, SpotifyImmersion], Title = "Immersion", Year = 2010 };
 		_albums.Add(album);
 		_tracks[album.Id] = [Track(album.Id, 1, 1, "Genesis", _pendulum)];
 
-		var response = (await Resolve().Run([Play("sp-genesis", "Genesis", 1, 1)], CancellationToken.None)).GetRight;
+		var response = (await Resolve().Run([Listed("sp-genesis", "Genesis", 1, 1)], CancellationToken.None)).GetRight;
 
-		Assert.Single(response.ResolvedPlays);
+		Assert.Single(response.ResolvedTracks);
 		Assert.Equal([new SpotifyTrackId("sp-genesis"), GenesisIsrc], _tracks[album.Id][0].ExternalIds);
 		_source.Verify(source => source.FindLinkedReleases(It.IsAny<ExternalId>(), It.IsAny<CancellationToken>()), Times.Never);
 		_syncAlbum.Verify(sync => sync.Run(It.IsAny<AlbumId>(), It.IsAny<CancellationToken>()), Times.Never);
 	}
 
 	[Fact]
-	public async Task Saves_nothing_for_a_play_whose_track_already_holds_its_id()
+	public async Task Saves_nothing_when_the_track_already_holds_the_providers_ids()
 	{
 		var album = new Album { ExternalIds = [ImmersionRelease, SpotifyImmersion], Title = "Immersion", Year = 2010 };
 		_albums.Add(album);
@@ -372,9 +372,9 @@ public class ResolvePlaysServiceTests
 		genesis.ExternalIds = [new SpotifyTrackId("sp-genesis"), GenesisIsrc];
 		_tracks[album.Id] = [genesis];
 
-		var response = (await Resolve().Run([Play("sp-genesis", "Genesis", 1, 1)], CancellationToken.None)).GetRight;
+		var response = (await Resolve().Run([Listed("sp-genesis", "Genesis", 1, 1)], CancellationToken.None)).GetRight;
 
-		Assert.Single(response.ResolvedPlays);
+		Assert.Single(response.ResolvedTracks);
 		_catalogue.Verify(catalogue => catalogue.SaveAlbumTracks(It.IsAny<AlbumId>(), It.IsAny<IReadOnlyList<Track>>(), It.IsAny<CancellationToken>()), Times.Never);
 	}
 
@@ -385,9 +385,9 @@ public class ResolvePlaysServiceTests
 		_albums.Add(album);
 		_savedAlbums.Add(album);
 
-		var response = (await Resolve().Run([Play("sp-genesis", "Genesis", 1, 1)], CancellationToken.None)).GetRight;
+		var response = (await Resolve().Run([Listed("sp-genesis", "Genesis", 1, 1)], CancellationToken.None)).GetRight;
 
-		Assert.Single(response.ResolvedPlays);
+		Assert.Single(response.ResolvedTracks);
 		_syncAlbum.Verify(sync => sync.Run(album.Id, It.IsAny<CancellationToken>()), Times.Once);
 	}
 
@@ -399,14 +399,14 @@ public class ResolvePlaysServiceTests
 	{
 		_source.Setup(source => source.FindLinkedReleases(SpotifyImmersion, It.IsAny<CancellationToken>())).ReturnsAsync([ImmersionRelease]);
 
-		var response = (await Resolve().Run([Play("sp-track", playTitle, disc, number)], CancellationToken.None)).GetRight;
+		var response = (await Resolve().Run([Listed("sp-track", playTitle, disc, number)], CancellationToken.None)).GetRight;
 
 		var tagged = _tracks[response.CreatedAlbums[0].Id].Single(track => track.ExternalIds.Contains(new SpotifyTrackId("sp-track")));
 		Assert.Equal(expectedTrack, tagged.Title);
 	}
 
 	[Fact]
-	public async Task Matches_a_track_holding_the_plays_isrc_whatever_its_title_and_place()
+	public async Task Matches_a_track_holding_the_providers_isrc_whatever_its_title_and_place()
 	{
 		var album = new Album { ExternalIds = [ImmersionRelease, SpotifyImmersion], Title = "Immersion", Year = 2010 };
 		_albums.Add(album);
@@ -415,15 +415,15 @@ public class ResolvePlaysServiceTests
 		selfVsSelf.ExternalIds = [new MusicBrainzRecordingId("rec-self"), new Isrc("gbaht1000182")];
 		_tracks[album.Id] = [genesis, selfVsSelf];
 
-		var response = (await Resolve().Run([Play("sp-track", "Genesis [Feat. Nobody] - 2020 Remaster", 3, 7)], CancellationToken.None)).GetRight;
+		var response = (await Resolve().Run([Listed("sp-track", "Genesis [Feat. Nobody] - 2020 Remaster", 3, 7)], CancellationToken.None)).GetRight;
 
-		Assert.Single(response.ResolvedPlays);
+		Assert.Single(response.ResolvedTracks);
 		Assert.Equal([new MusicBrainzRecordingId("rec-self"), GenesisIsrc, new SpotifyTrackId("sp-track")], selfVsSelf.ExternalIds);
 		Assert.Empty(genesis.ExternalIds);
 	}
 
 	[Fact]
-	public async Task Prefers_the_track_holding_the_plays_track_id_over_one_holding_its_isrc()
+	public async Task Prefers_the_track_holding_the_providers_track_id_over_one_holding_its_isrc()
 	{
 		var album = new Album { ExternalIds = [ImmersionRelease, SpotifyImmersion], Title = "Immersion", Year = 2010 };
 		_albums.Add(album);
@@ -433,62 +433,62 @@ public class ResolvePlaysServiceTests
 		sameTrack.ExternalIds = [new SpotifyTrackId("sp-genesis")];
 		_tracks[album.Id] = [sameIsrc, sameTrack];
 
-		await Resolve().Run([Play("sp-genesis", "Genesis", 1, 1)], CancellationToken.None);
+		await Resolve().Run([Listed("sp-genesis", "Genesis", 1, 1)], CancellationToken.None);
 
 		Assert.Equal([new SpotifyTrackId("sp-genesis"), GenesisIsrc], sameTrack.ExternalIds);
 		Assert.Equal([GenesisIsrc], sameIsrc.ExternalIds);
 	}
 
 	[Fact]
-	public async Task Leaves_a_play_unresolved_when_the_album_has_no_matching_track()
+	public async Task Leaves_a_track_unresolved_when_the_album_has_no_matching_track()
 	{
 		_source.Setup(source => source.FindLinkedReleases(SpotifyImmersion, It.IsAny<CancellationToken>())).ReturnsAsync([ImmersionRelease]);
-		var play = Play("sp-bonus", "Bonus Track", 1, 16);
+		var listed = Listed("sp-bonus", "Bonus Track", 1, 16);
 
-		var response = (await Resolve().Run([play], CancellationToken.None)).GetRight;
+		var response = (await Resolve().Run([listed], CancellationToken.None)).GetRight;
 
-		Assert.Equal([play], response.UnresolvedPlays);
+		Assert.Equal([listed], response.UnresolvedTracks);
 		Assert.Single(response.CreatedAlbums);
 	}
 
 	[Fact]
-	public async Task Resolves_the_album_once_for_several_plays_of_it()
+	public async Task Resolves_the_album_once_for_several_tracks_of_it()
 	{
 		_source.Setup(source => source.FindLinkedReleases(SpotifyImmersion, It.IsAny<CancellationToken>())).ReturnsAsync([ImmersionRelease]);
 
-		var response = (await Resolve().Run([Play("sp-genesis", "Genesis", 1, 1), Play("sp-self", "Self vs Self", 1, 12)], CancellationToken.None)).GetRight;
+		var response = (await Resolve().Run([Listed("sp-genesis", "Genesis", 1, 1), Listed("sp-self", "Self vs Self", 1, 12)], CancellationToken.None)).GetRight;
 
-		Assert.Equal(2, response.ResolvedPlays.Count);
+		Assert.Equal(2, response.ResolvedTracks.Count);
 		Assert.Single(response.CreatedAlbums);
 		_source.Verify(source => source.FindLinkedReleases(SpotifyImmersion, It.IsAny<CancellationToken>()), Times.Once);
 	}
 
 	[Fact]
-	public async Task Leaves_the_plays_of_an_album_unresolved_when_its_sync_fails_and_carries_on_with_the_next_album()
+	public async Task Leaves_the_tracks_of_an_album_unresolved_when_its_sync_fails_and_carries_on_with_the_next_album()
 	{
 		var otherAlbum = new SpotifyAlbumId("sp-other");
 		_source.Setup(source => source.FindLinkedReleases(SpotifyImmersion, It.IsAny<CancellationToken>())).ReturnsAsync([ImmersionRelease]);
 		_source.Setup(source => source.FindLinkedReleases(otherAlbum, It.IsAny<CancellationToken>())).ThrowsAsync(new InvalidOperationException("rate limited"));
-		var failed = Play("sp-x", "X", 1, 1) with { AlbumId = otherAlbum };
-		var resolved = Play("sp-genesis", "Genesis", 1, 1);
+		var failed = Listed("sp-x", "X", 1, 1) with { AlbumId = otherAlbum };
+		var resolved = Listed("sp-genesis", "Genesis", 1, 1);
 
 		var response = (await Resolve().Run([failed, resolved], CancellationToken.None)).GetRight;
 
-		Assert.Equal([resolved], response.ResolvedPlays);
-		Assert.Equal([failed], response.UnresolvedPlays);
+		Assert.Equal([resolved], response.ResolvedTracks);
+		Assert.Equal([failed], response.UnresolvedTracks);
 	}
 
 	[Fact]
-	public async Task Leaves_plays_unresolved_when_the_album_sync_returns_errors()
+	public async Task Leaves_tracks_unresolved_when_the_album_sync_returns_errors()
 	{
 		_source.Setup(source => source.FindLinkedReleases(SpotifyImmersion, It.IsAny<CancellationToken>())).ReturnsAsync([ImmersionRelease]);
 		_syncAlbum.Setup(sync => sync.Run(It.IsAny<AlbumId>(), It.IsAny<CancellationToken>()))
 			.ReturnsAsync(new List<ISyncAlbumWithDiscographyError> { new UnableToFindDiscographyAlbumError() });
-		var play = Play("sp-genesis", "Genesis", 1, 1);
+		var listed = Listed("sp-genesis", "Genesis", 1, 1);
 
-		var response = (await Resolve().Run([play], CancellationToken.None)).GetRight;
+		var response = (await Resolve().Run([listed], CancellationToken.None)).GetRight;
 
-		Assert.Equal([play], response.UnresolvedPlays);
+		Assert.Equal([listed], response.UnresolvedTracks);
 		Assert.Empty(response.CreatedAlbums);
 	}
 
@@ -497,17 +497,17 @@ public class ResolvePlaysServiceTests
 	{
 		_catalogue.Setup(catalogue => catalogue.GetAlbums(It.IsAny<CancellationToken>())).ThrowsAsync(new InvalidOperationException("database is locked"));
 
-		var result = await Resolve().Run([Play("sp-genesis", "Genesis", 1, 1)], CancellationToken.None);
+		var result = await Resolve().Run([Listed("sp-genesis", "Genesis", 1, 1)], CancellationToken.None);
 
 		Assert.Equal(new UnableToReadCatalogueError("database is locked"), Assert.Single(result.GetLeft));
 	}
 
 	[Fact]
-	public async Task Cancellation_propagates_instead_of_leaving_plays_unresolved()
+	public async Task Cancellation_propagates_instead_of_leaving_tracks_unresolved()
 	{
 		_source.Setup(source => source.FindLinkedReleases(It.IsAny<ExternalId>(), It.IsAny<CancellationToken>())).ThrowsAsync(new OperationCanceledException());
 
-		await Assert.ThrowsAsync<OperationCanceledException>(() => Resolve().Run([Play("sp-genesis", "Genesis", 1, 1)], CancellationToken.None));
+		await Assert.ThrowsAsync<OperationCanceledException>(() => Resolve().Run([Listed("sp-genesis", "Genesis", 1, 1)], CancellationToken.None));
 	}
 
 	private void SetupRecordingReleases(params DiscographyRelease[] releases)
@@ -516,17 +516,16 @@ public class ResolvePlaysServiceTests
 			.ReturnsAsync([new DiscographyRecording(new MusicBrainzRecordingId("rec-genesis"), releases)]);
 	}
 
-	private static Play Play(string trackId, string title, int disc, int number)
+	private static ProviderTrack Listed(string trackId, string title, int disc, int number)
 	{
-		return new Play
+		return new ProviderTrack
 		{
-			PlayedAt = new DateTimeOffset(2026, 11, 27, 8, 0, 0, TimeSpan.Zero),
-			TrackId = new SpotifyTrackId(trackId),
-			TrackTitle = title,
+			Id = new SpotifyTrackId(trackId),
+			Title = title,
 			Isrc = "GBAHT1000182",
 			DiscNumber = disc,
 			TrackNumber = number,
-			Artists = [new PlayArtist(new SpotifyArtistId("sp-pendulum"), "Pendulum")],
+			Artists = [new ProviderArtist(new SpotifyArtistId("sp-pendulum"), "Pendulum")],
 			AlbumId = SpotifyImmersion,
 			AlbumTitle = "Immersion",
 		};

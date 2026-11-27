@@ -1,10 +1,10 @@
-using DiscoTrack.ListenHistory.ResolvePlays;
+using DiscoTrack.Providers.ResolveProviderTracks;
 using DiscoTrack.ListenHistory.SyncListenHistory;
 using Microsoft.Extensions.Logging;
 
 namespace DiscoTrack.Jobs.JobHandlers;
 
-public class SyncListenHistoryJobHandler(ISyncListenHistoryService syncListenHistory, IResolvePlaysService resolvePlays, ILogger<SyncListenHistoryJobHandler> logger) : ISyncListenHistoryJobHandler
+public class SyncListenHistoryJobHandler(ISyncListenHistoryService syncListenHistory, IResolveProviderTracksService resolveProviderTracks, ILogger<SyncListenHistoryJobHandler> logger) : ISyncListenHistoryJobHandler
 {
 	public async Task Execute(CancellationToken cancellationToken)
 	{
@@ -28,7 +28,7 @@ public class SyncListenHistoryJobHandler(ISyncListenHistoryService syncListenHis
 			response.FetchedPlays,
 			response.After?.ToString("O") ?? "the beginning");
 
-		var resolution = await resolvePlays.Run(response.AddedPlays, cancellationToken);
+		var resolution = await resolveProviderTracks.Run(response.AddedPlays.Select(play => play.Track).ToList(), cancellationToken);
 
 		if (resolution.IsLeft)
 		{
@@ -42,8 +42,8 @@ public class SyncListenHistoryJobHandler(ISyncListenHistoryService syncListenHis
 
 		logger.LogInformation(
 			"{ResolvedPlays} added plays resolved to catalogue tracks, {UnresolvedPlays} not resolved, {CreatedAlbums} albums created",
-			resolution.GetRight.ResolvedPlays.Count,
-			resolution.GetRight.UnresolvedPlays.Count,
+			resolution.GetRight.ResolvedTracks.Count,
+			resolution.GetRight.UnresolvedTracks.Count,
 			resolution.GetRight.CreatedAlbums.Count);
 	}
 

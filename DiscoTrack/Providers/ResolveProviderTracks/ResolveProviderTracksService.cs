@@ -8,29 +8,29 @@ using DiscoTrack.ExternalIds;
 using DiscoTrack.Tracks;
 using Microsoft.Extensions.Logging;
 
-namespace DiscoTrack.ListenHistory.ResolvePlays;
+namespace DiscoTrack.Providers.ResolveProviderTracks;
 
-public class ResolvePlaysService(
+public class ResolveProviderTracksService(
 	IDiscographySource source,
 	ICatalogue catalogue,
 	ISyncAlbumWithDiscographyService syncAlbumWithDiscography,
-	ILogger<ResolvePlaysService> logger) : IResolvePlaysService
+	ILogger<ResolveProviderTracksService> logger) : IResolveProviderTracksService
 {
 	/// <summary>
-	/// <para>Makes the catalogue hold the album, track and artists of each play, carrying the play's provider ids. A play is found again through those ids; nothing is stored on the play.</para>
+	/// <para>Makes the catalogue hold the album, track and artists of each track a provider describes, carrying the provider's ids. The provider's track is found again through those ids; nothing else links them.</para>
 	/// <para>
 	/// An album the catalogue lacks is created untracked from the discography release it resolves to:
 	/// first the release the discography links to the provider's album,
-	/// second a release of the recording carrying the play's ISRC whose title matches the album's,
-	/// third any release of that recording, which is a guess: the play then sits on an album that holds its recording.
+	/// second a release of the recording carrying the track's ISRC whose title matches the album's,
+	/// third any release of that recording, which is a guess: the track then sits on an album that holds its recording.
 	/// </para>
 	/// <para>
-	/// When the discography answers that it has no such release, the album, its artists and the played track are created untracked
-	/// from the play alone, holding only the provider's ids. Nothing is created when the discography could not be asked.
+	/// When the discography answers that it has no such release, the album, its artists and the track are created untracked
+	/// from the provider's description alone, holding only the provider's ids. Nothing is created when the discography could not be asked.
 	/// </para>
-	/// <para>A play whose track is not on an album that has the discography's tracklist is left unresolved.</para>
+	/// <para>A track that is not on an album holding the discography's tracklist is left unresolved.</para>
 	/// </summary>
-	public async Task<Either<IList<IResolvePlaysError>, ResolvePlaysResponse>> Run(IReadOnlyList<Play> plays, CancellationToken cancellationToken)
+	public async Task<Either<IList<IResolveProviderTracksError>, ResolveProviderTracksResponse>> Run(IReadOnlyList<ProviderTrack> providerTracks, CancellationToken cancellationToken)
 	{
 		List<Album> knownAlbums;
 		HashSet<ExternalId> artistExternalIds;
@@ -42,30 +42,30 @@ public class ResolvePlaysService(
 		}
 		catch (Exception exception) when (exception is not OperationCanceledException)
 		{
-			return new List<IResolvePlaysError> { new UnableToReadCatalogueError(exception.Message) };
+			return new List<IResolveProviderTracksError> { new UnableToReadCatalogueError(exception.Message) };
 		}
 
-		var resolvedPlays = new List<Play>();
+		var resolvedTracks = new List<ProviderTrack>();
 		var createdAlbums = new List<Album>();
 
-		foreach (var albumPlays in plays.Where(play => play.AlbumId is not null).GroupBy(play => play.AlbumId!))
+		foreach (var albumTracks in providerTracks.Where(providerTrack => providerTrack.AlbumId is not null).GroupBy(providerTrack => providerTrack.AlbumId!))
 		{
 			try
 			{
-				resolvedPlays.AddRange(await ResolveAlbumPlays(albumPlays.Key, albumPlays.ToList(), knownAlbums, artistExternalIds, createdAlbums, cancellationToken));
+				resolvedTracks.AddRange(await ResolveAlbumTracks(albumTracks.Key, albumTracks.ToList(), knownAlbums, artistExternalIds, createdAlbums, cancellationToken));
 			}
 			catch (Exception exception) when (exception is not OperationCanceledException)
 			{
-				logger.LogWarning(exception, "Failed to resolve the plays of {AlbumTitle} ({AlbumId})", albumPlays.First().AlbumTitle, albumPlays.Key);
+				logger.LogWarning(exception, "Failed to resolve the providerTracks of {AlbumTitle} ({AlbumId})", albumTracks.First().AlbumTitle, albumTracks.Key);
 			}
 		}
 
-		return new ResolvePlaysResponse(resolvedPlays, plays.Except(resolvedPlays).ToList(), createdAlbums);
+		return new ResolveProviderTracksResponse(resolvedTracks, providerTracks.Except(resolvedTracks).ToList(), createdAlbums);
 	}
 
-	private async Task<IReadOnlyList<Play>> ResolveAlbumPlays(
+	private async Task<IReadOnlyList<ProviderTrack>> ResolveAlbumTracks(
 		ExternalId albumId,
-		IReadOnlyList<Play> plays,
+		IReadOnlyList<ProviderTrack> providerTracks,
 		List<Album> knownAlbums,
 		HashSet<ExternalId> artistExternalIds,
 		List<Album> createdAlbums,
@@ -75,20 +75,20 @@ public class ResolvePlaysService(
 
 		if (album is null)
 		{
-			var releaseId = await FindRelease(albumId, plays[0], cancellationToken);
+			var releaseId = await FindRelease(albumId, providerTracks[0], cancellationToken);
 
 			if (releaseId is null)
 			{
-				logger.LogDebug("The discography has no release for {AlbumTitle} ({AlbumId})", plays[0].AlbumTitle, albumId);
+				logger.LogDebug("The discography has no release for {AlbumTitle} ({AlbumId})", providerTracks[0].AlbumTitle, albumId);
 
-				album = await CreateProviderAlbum(albumId, plays[0], knownAlbums, artistExternalIds, cancellationToken);
+				album = await CreateProviderAlbum(albumId, providerTracks[0], knownAlbums, artistExternalIds, cancellationToken);
 				createdAlbums.Add(album);
 			}
 			else
 			{
 				var heldAlbum = knownAlbums.FirstOrDefault(knownAlbum => knownAlbum.ExternalIds.Contains(releaseId));
 
-				album = heldAlbum ?? new Album { Title = plays[0].AlbumTitle ?? plays[0].TrackTitle, Year = 0, ExternalIds = [releaseId] };
+				album = heldAlbum ?? new Album { Title = providerTracks[0].AlbumTitle ?? providerTracks[0].Title, Year = 0, ExternalIds = [releaseId] };
 				album.ExternalIds = album.ExternalIds.Append(albumId).ToList();
 
 				await catalogue.SaveAlbum(album, cancellationToken);
@@ -123,28 +123,28 @@ public class ResolvePlaysService(
 			tracks = (await catalogue.GetAlbumTracks(album.Id, cancellationToken)).ToList();
 		}
 
-		// Only an album without the discography's tracklist takes tracks from plays: on a listed album an unmatched play is a matching failure
-		var takesPlayedTracks = !tracks.Any(track => track.ExternalIds.Any(externalId => externalId.Provider == source.RecordingProvider));
-		var resolvedPlays = new List<Play>();
+		// Only an album without the discography's tracklist takes the provider's tracks: on a listed album an unmatched track is a matching failure
+		var takesProviderTracks = !tracks.Any(track => track.ExternalIds.Any(externalId => externalId.Provider == source.RecordingProvider));
+		var resolvedTracks = new List<ProviderTrack>();
 		var changedArtists = new List<Artist>();
 		var tracksChanged = false;
 		List<Artist>? knownArtists = null;
 
-		foreach (var play in plays)
+		foreach (var providerTrack in providerTracks)
 		{
-			var track = tracks.FirstOrDefault(candidate => candidate.ExternalIds.Contains(play.TrackId)) ?? FindTrack(tracks, play);
+			var track = tracks.FirstOrDefault(candidate => candidate.ExternalIds.Contains(providerTrack.Id)) ?? FindTrack(tracks, providerTrack);
 
-			if (track is null && takesPlayedTracks)
+			if (track is null && takesProviderTracks)
 			{
 				knownArtists ??= (await catalogue.GetArtists(cancellationToken)).ToList();
 				track = new Track
 				{
 					AlbumId = album.Id,
-					Title = play.TrackTitle,
-					DiscNumber = play.DiscNumber ?? 1,
-					Position = play.TrackNumber ?? 0,
-					DurationMs = play.DurationMs,
-					Artists = ChooseArtists(play, knownArtists, artistExternalIds, changedArtists)
+					Title = providerTrack.Title,
+					DiscNumber = providerTrack.DiscNumber ?? 1,
+					Position = providerTrack.TrackNumber ?? 0,
+					DurationMs = providerTrack.DurationMs,
+					Artists = ChooseArtists(providerTrack, knownArtists, artistExternalIds, changedArtists)
 						.Select((artist, index) => new TrackArtist { Artist = artist, Position = index + 1 })
 						.ToList(),
 				};
@@ -153,18 +153,18 @@ public class ResolvePlaysService(
 
 			if (track is null)
 			{
-				logger.LogDebug("{Album} has no track matching {Play}", album, play);
+				logger.LogDebug("{Album} has no track matching {ProviderTrack}", album, providerTrack);
 
 				continue;
 			}
 
 			var heldIds = track.ExternalIds.Count;
 
-			track.AddExternalIds(PlayIds(play));
+			track.AddExternalIds(ProviderIds(providerTrack));
 			tracksChanged = tracksChanged || track.ExternalIds.Count != heldIds;
 
-			changedArtists.AddRange(IdentifyArtists(play, track, album, artistExternalIds));
-			resolvedPlays.Add(play);
+			changedArtists.AddRange(IdentifyArtists(providerTrack, track, album, artistExternalIds));
+			resolvedTracks.Add(providerTrack);
 		}
 
 		foreach (var artist in changedArtists.Distinct())
@@ -177,20 +177,20 @@ public class ResolvePlaysService(
 			await catalogue.SaveAlbumTracks(album.Id, tracks, cancellationToken);
 		}
 
-		return resolvedPlays;
+		return resolvedTracks;
 	}
 
-	// The album as the play describes it. Its artists may let the discography find it by title, which the album sync tries
-	private async Task<Album> CreateProviderAlbum(ExternalId albumId, Play play, List<Album> knownAlbums, HashSet<ExternalId> artistExternalIds, CancellationToken cancellationToken)
+	// The album as the provider's track describes it. Its artists may let the discography find it by title, which the album sync tries
+	private async Task<Album> CreateProviderAlbum(ExternalId albumId, ProviderTrack providerTrack, List<Album> knownAlbums, HashSet<ExternalId> artistExternalIds, CancellationToken cancellationToken)
 	{
 		var knownArtists = (await catalogue.GetArtists(cancellationToken)).ToList();
 		var changedArtists = new List<Artist>();
 		var album = new Album
 		{
-			Title = play.AlbumTitle ?? play.TrackTitle,
+			Title = providerTrack.AlbumTitle ?? providerTrack.Title,
 			Year = 0,
 			ExternalIds = [albumId],
-			Artists = ChooseArtists(play, knownArtists, artistExternalIds, changedArtists)
+			Artists = ChooseArtists(providerTrack, knownArtists, artistExternalIds, changedArtists)
 				.Select((artist, index) => new AlbumArtist { Artist = artist, Position = index + 1 })
 				.ToList(),
 		};
@@ -222,35 +222,35 @@ public class ResolvePlaysService(
 		return album;
 	}
 
-	// The artist holding the play artist's id, else the one artist of that name without such an id, else a new untracked artist
-	private static IReadOnlyList<Artist> ChooseArtists(Play play, List<Artist> knownArtists, HashSet<ExternalId> artistExternalIds, List<Artist> changedArtists)
+	// The artist holding the provider artist's id, else the one artist of that name without such an id, else a new untracked artist
+	private static IReadOnlyList<Artist> ChooseArtists(ProviderTrack providerTrack, List<Artist> knownArtists, HashSet<ExternalId> artistExternalIds, List<Artist> changedArtists)
 	{
 		var artists = new List<Artist>();
 
-		foreach (var playArtist in play.Artists)
+		foreach (var providerArtist in providerTrack.Artists)
 		{
-			var artist = knownArtists.FirstOrDefault(knownArtist => knownArtist.ExternalIds.Contains(playArtist.Id));
+			var artist = knownArtists.FirstOrDefault(knownArtist => knownArtist.ExternalIds.Contains(providerArtist.Id));
 
 			if (artist is null)
 			{
 				var namesakes = knownArtists
-					.Where(knownArtist => MatchKey.For(knownArtist.Name) == MatchKey.For(playArtist.Name))
-					.Where(knownArtist => knownArtist.ExternalIds.All(externalId => externalId.Provider != playArtist.Id.Provider))
+					.Where(knownArtist => MatchKey.For(knownArtist.Name) == MatchKey.For(providerArtist.Name))
+					.Where(knownArtist => knownArtist.ExternalIds.All(externalId => externalId.Provider != providerArtist.Id.Provider))
 					.ToList();
 
 				if (namesakes.Count == 1)
 				{
 					artist = namesakes[0];
-					artist.SetExternalId(playArtist.Id);
+					artist.SetExternalId(providerArtist.Id);
 				}
 				else
 				{
-					artist = new Artist { Name = playArtist.Name, ExternalIds = [playArtist.Id] };
+					artist = new Artist { Name = providerArtist.Name, ExternalIds = [providerArtist.Id] };
 					knownArtists.Add(artist);
 				}
 
 				changedArtists.Add(artist);
-				artistExternalIds.Add(playArtist.Id);
+				artistExternalIds.Add(providerArtist.Id);
 			}
 
 			artists.Add(artist);
@@ -284,7 +284,7 @@ public class ResolvePlaysService(
 		return response.Album;
 	}
 
-	private async Task<ExternalId?> FindRelease(ExternalId albumId, Play play, CancellationToken cancellationToken)
+	private async Task<ExternalId?> FindRelease(ExternalId albumId, ProviderTrack providerTrack, CancellationToken cancellationToken)
 	{
 		var linkedReleases = await source.FindLinkedReleases(albumId, cancellationToken);
 
@@ -293,16 +293,16 @@ public class ResolvePlaysService(
 			return linkedReleases[0];
 		}
 
-		if (play.Isrc is null || play.AlbumTitle is null)
+		if (providerTrack.Isrc is null || providerTrack.AlbumTitle is null)
 		{
 			return null;
 		}
 
-		var releases = (await source.FindRecordings(play.Isrc, cancellationToken))
+		var releases = (await source.FindRecordings(providerTrack.Isrc, cancellationToken))
 			.SelectMany(recording => recording.Releases)
 			.DistinctBy(release => release.ReleaseId)
 			.ToList();
-		var titleKey = MatchKey.For(play.AlbumTitle);
+		var titleKey = MatchKey.For(providerTrack.AlbumTitle);
 		var sameTitle = releases.Where(release => MatchKey.For(release.Title) == titleKey).ToList();
 
 		// An edition named in the title ("Deluxe", "Remastered") still starts with the album's own title
@@ -324,23 +324,23 @@ public class ResolvePlaysService(
 			?.ReleaseId;
 	}
 
-	private static IReadOnlyList<ExternalId> PlayIds(Play play)
+	private static IReadOnlyList<ExternalId> ProviderIds(ProviderTrack providerTrack)
 	{
-		return play.Isrc is null ? [play.TrackId] : [play.TrackId, new Isrc(play.Isrc)];
+		return providerTrack.Isrc is null ? [providerTrack.Id] : [providerTrack.Id, new Isrc(providerTrack.Isrc)];
 	}
 
-	private static Track? FindTrack(IReadOnlyList<Track> tracks, Play play)
+	private static Track? FindTrack(IReadOnlyList<Track> tracks, ProviderTrack providerTrack)
 	{
-		var isrcMatch = play.Isrc is null ? null : tracks.FirstOrDefault(track => track.ExternalIds.Contains(new Isrc(play.Isrc)));
+		var isrcMatch = providerTrack.Isrc is null ? null : tracks.FirstOrDefault(track => track.ExternalIds.Contains(new Isrc(providerTrack.Isrc)));
 
 		if (isrcMatch is not null)
 		{
 			return isrcMatch;
 		}
 
-		var titleKey = MatchKey.For(play.TrackTitle);
+		var titleKey = MatchKey.For(providerTrack.Title);
 		var samePlace = tracks
-			.Where(track => track.DiscNumber == (play.DiscNumber ?? 1) && track.Position == play.TrackNumber)
+			.Where(track => track.DiscNumber == (providerTrack.DiscNumber ?? 1) && track.Position == providerTrack.TrackNumber)
 			.ToList();
 		var sameTitle = tracks.Where(track => MatchKey.For(track.Title) == titleKey).ToList();
 
@@ -349,20 +349,20 @@ public class ResolvePlaysService(
 			?? (sameTitle.Count == 1 ? sameTitle[0] : null);
 	}
 
-	// Gives the play's artist ids to the artists of the same name credited on the track, else on the album
-	private static IReadOnlyList<Artist> IdentifyArtists(Play play, Track track, Album album, HashSet<ExternalId> artistExternalIds)
+	// Gives the provider's artist ids to the artists of the same name credited on the track, else on the album
+	private static IReadOnlyList<Artist> IdentifyArtists(ProviderTrack providerTrack, Track track, Album album, HashSet<ExternalId> artistExternalIds)
 	{
 		var creditedArtists = track.Artists.Select(credit => credit.Artist)
 			.Concat(album.Artists.Select(credit => credit.Artist))
 			.ToList();
 
-		return play.Artists
-			.Where(playArtist => !artistExternalIds.Contains(playArtist.Id))
-			.Select(playArtist => (PlayArtist: playArtist, Artist: creditedArtists.FirstOrDefault(artist => MatchKey.For(artist.Name) == MatchKey.For(playArtist.Name))))
+		return providerTrack.Artists
+			.Where(providerArtist => !artistExternalIds.Contains(providerArtist.Id))
+			.Select(providerArtist => (ProviderArtist: providerArtist, Artist: creditedArtists.FirstOrDefault(artist => MatchKey.For(artist.Name) == MatchKey.For(providerArtist.Name))))
 			.Where(match => match.Artist is not null)
-			.Where(match => match.Artist!.ExternalIds.All(externalId => externalId.Provider != match.PlayArtist.Id.Provider))
-			.Apply(match => match.Artist!.SetExternalId(match.PlayArtist.Id))
-			.Apply(match => artistExternalIds.Add(match.PlayArtist.Id))
+			.Where(match => match.Artist!.ExternalIds.All(externalId => externalId.Provider != match.ProviderArtist.Id.Provider))
+			.Apply(match => match.Artist!.SetExternalId(match.ProviderArtist.Id))
+			.Apply(match => artistExternalIds.Add(match.ProviderArtist.Id))
 			.Select(match => match.Artist!)
 			.ToList();
 	}

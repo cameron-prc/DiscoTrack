@@ -4,6 +4,7 @@ using DiscoTrack.Infrastructure.Sqlite;
 using DiscoTrack.Infrastructure.Sqlite.Migrations;
 using DiscoTrack.Infrastructure.Tests.Sqlite;
 using DiscoTrack.ListenHistory;
+using DiscoTrack.Providers;
 using Microsoft.Extensions.Options;
 
 namespace DiscoTrack.Infrastructure.Tests.ListenHistory;
@@ -40,15 +41,18 @@ public sealed class SqliteListenHistoryTests : IDisposable
 		var play = new Play
 		{
 			PlayedAt = Morning,
-			TrackId = new SpotifyTrackId("trk-genesis"),
-			TrackTitle = "Genesis",
-			Isrc = "GBAHT1000182",
-			DurationMs = 69000,
-			DiscNumber = 2,
-			TrackNumber = 12,
-			Artists = [new PlayArtist(new SpotifyArtistId("art-pendulum"), "Pendulum"), new PlayArtist(new SpotifyArtistId("art-guest"), "Guest")],
-			AlbumId = new SpotifyAlbumId("alb-immersion"),
-			AlbumTitle = "Immersion",
+			Track = new ProviderTrack
+			{
+				Id = new SpotifyTrackId("trk-genesis"),
+				Title = "Genesis",
+				Isrc = "GBAHT1000182",
+				DurationMs = 69000,
+				DiscNumber = 2,
+				TrackNumber = 12,
+				Artists = [new ProviderArtist(new SpotifyArtistId("art-pendulum"), "Pendulum"), new ProviderArtist(new SpotifyArtistId("art-guest"), "Guest")],
+				AlbumId = new SpotifyAlbumId("alb-immersion"),
+				AlbumTitle = "Immersion",
+			},
 		};
 
 		var added = await _history.AddPlays([play], CancellationToken.None);
@@ -57,14 +61,14 @@ public sealed class SqliteListenHistoryTests : IDisposable
 		var stored = Assert.Single(await _history.GetPlays(0, 50, CancellationToken.None));
 		Assert.Equal(play.Id, stored.Id);
 		Assert.Equal(Morning, stored.PlayedAt);
-		Assert.Equal(new SpotifyTrackId("trk-genesis"), stored.TrackId);
-		Assert.Equal("Genesis", stored.TrackTitle);
-		Assert.Equal("GBAHT1000182", stored.Isrc);
-		Assert.Equal(69000, stored.DurationMs);
-		Assert.Equal((2, 12), (stored.DiscNumber, stored.TrackNumber));
-		Assert.Equal(play.Artists, stored.Artists);
-		Assert.Equal(new SpotifyAlbumId("alb-immersion"), stored.AlbumId);
-		Assert.Equal("Immersion", stored.AlbumTitle);
+		Assert.Equal(new SpotifyTrackId("trk-genesis"), stored.Track.Id);
+		Assert.Equal("Genesis", stored.Track.Title);
+		Assert.Equal("GBAHT1000182", stored.Track.Isrc);
+		Assert.Equal(69000, stored.Track.DurationMs);
+		Assert.Equal((2, 12), (stored.Track.DiscNumber, stored.Track.TrackNumber));
+		Assert.Equal(play.Track.Artists, stored.Track.Artists);
+		Assert.Equal(new SpotifyAlbumId("alb-immersion"), stored.Track.AlbumId);
+		Assert.Equal("Immersion", stored.Track.AlbumTitle);
 	}
 
 	[Fact]
@@ -73,13 +77,13 @@ public sealed class SqliteListenHistoryTests : IDisposable
 		await _history.AddPlays([Play("trk-bare", Morning)], CancellationToken.None);
 
 		var stored = Assert.Single(await _history.GetPlays(0, 50, CancellationToken.None));
-		Assert.Null(stored.AlbumId);
-		Assert.Null(stored.AlbumTitle);
-		Assert.Null(stored.Isrc);
-		Assert.Null(stored.DurationMs);
-		Assert.Null(stored.DiscNumber);
-		Assert.Null(stored.TrackNumber);
-		Assert.Empty(stored.Artists);
+		Assert.Null(stored.Track.AlbumId);
+		Assert.Null(stored.Track.AlbumTitle);
+		Assert.Null(stored.Track.Isrc);
+		Assert.Null(stored.Track.DurationMs);
+		Assert.Null(stored.Track.DiscNumber);
+		Assert.Null(stored.Track.TrackNumber);
+		Assert.Empty(stored.Track.Artists);
 	}
 
 	[Fact]
@@ -91,7 +95,7 @@ public sealed class SqliteListenHistoryTests : IDisposable
 
 		Assert.Empty(added);
 		Assert.Equal(2, await _history.CountPlays(CancellationToken.None));
-		Assert.All(await _history.GetPlays(0, 50, CancellationToken.None), play => Assert.Single(play.Artists));
+		Assert.All(await _history.GetPlays(0, 50, CancellationToken.None), play => Assert.Single(play.Track.Artists));
 	}
 
 	[Fact]
@@ -101,7 +105,7 @@ public sealed class SqliteListenHistoryTests : IDisposable
 
 		var added = await _history.AddPlays([Play("trk-1", Morning), Play("trk-2", Morning.AddMinutes(4))], CancellationToken.None);
 
-		Assert.Equal("trk-2", Assert.Single(added).TrackTitle);
+		Assert.Equal("trk-2", Assert.Single(added).Track.Title);
 		Assert.Equal(2, await _history.CountPlays(CancellationToken.None));
 	}
 
@@ -135,8 +139,8 @@ public sealed class SqliteListenHistoryTests : IDisposable
 		var firstPage = await _history.GetPlays(0, 2, CancellationToken.None);
 		var secondPage = await _history.GetPlays(2, 2, CancellationToken.None);
 
-		Assert.Equal(["trk-new", "trk-mid"], firstPage.Select(play => play.TrackTitle));
-		Assert.Equal(["trk-old"], secondPage.Select(play => play.TrackTitle));
+		Assert.Equal(["trk-new", "trk-mid"], firstPage.Select(play => play.Track.Title));
+		Assert.Equal(["trk-old"], secondPage.Select(play => play.Track.Title));
 	}
 
 	[Fact]
@@ -151,7 +155,7 @@ public sealed class SqliteListenHistoryTests : IDisposable
 	private static Play Play(string trackId, DateTimeOffset playedAt)
 	{
 		return trackId == "trk-bare"
-			? new Play { PlayedAt = playedAt, TrackId = new SpotifyTrackId(trackId), TrackTitle = trackId }
-			: new Play { PlayedAt = playedAt, TrackId = new SpotifyTrackId(trackId), TrackTitle = trackId, Artists = [new PlayArtist(new SpotifyArtistId("art-1"), "Artist")] };
+			? new Play { PlayedAt = playedAt, Track = new ProviderTrack { Id = new SpotifyTrackId(trackId), Title = trackId } }
+			: new Play { PlayedAt = playedAt, Track = new ProviderTrack { Id = new SpotifyTrackId(trackId), Title = trackId, Artists = [new ProviderArtist(new SpotifyArtistId("art-1"), "Artist")] } };
 	}
 }

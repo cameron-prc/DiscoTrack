@@ -3,7 +3,8 @@ using DiscoTrack.Jobs;
 using DiscoTrack.Jobs.JobHandlers;
 using DiscoTrack.ExternalIds;
 using DiscoTrack.ListenHistory;
-using DiscoTrack.ListenHistory.ResolvePlays;
+using DiscoTrack.Providers;
+using DiscoTrack.Providers.ResolveProviderTracks;
 using DiscoTrack.ListenHistory.SyncListenHistory;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
@@ -13,12 +14,12 @@ namespace DiscoTrack.Tests.Jobs;
 public class SyncListenHistoryJobHandlerTests
 {
 	private readonly Mock<ISyncListenHistoryService> _service = new();
-	private readonly Mock<IResolvePlaysService> _resolvePlays = new();
+	private readonly Mock<IResolveProviderTracksService> _resolvePlays = new();
 
 	public SyncListenHistoryJobHandlerTests()
 	{
-		_resolvePlays.Setup(resolve => resolve.Run(It.IsAny<IReadOnlyList<Play>>(), It.IsAny<CancellationToken>()))
-			.ReturnsAsync(new ResolvePlaysResponse([], [], []));
+		_resolvePlays.Setup(resolve => resolve.Run(It.IsAny<IReadOnlyList<ProviderTrack>>(), It.IsAny<CancellationToken>()))
+			.ReturnsAsync(new ResolveProviderTracksResponse([], [], []));
 	}
 
 	private SyncListenHistoryJobHandler Handler()
@@ -30,20 +31,20 @@ public class SyncListenHistoryJobHandlerTests
 	public async Task Resolves_the_plays_the_sync_added()
 	{
 		using var cts = new CancellationTokenSource();
-		IReadOnlyList<Play> added = [new Play { PlayedAt = DateTimeOffset.UnixEpoch, TrackId = new SpotifyTrackId("trk-1"), TrackTitle = "Genesis" }];
+		IReadOnlyList<Play> added = [new Play { PlayedAt = DateTimeOffset.UnixEpoch, Track = new ProviderTrack { Id = new SpotifyTrackId("trk-1"), Title = "Genesis" } }];
 		_service.Setup(service => service.Run(cts.Token)).ReturnsAsync(new SyncListenHistoryResponse(FetchedPlays: 3, AddedPlays: added, After: null));
 
 		await Handler().Execute(cts.Token);
 
-		_resolvePlays.Verify(resolve => resolve.Run(added, cts.Token), Times.Once);
+		_resolvePlays.Verify(resolve => resolve.Run(It.Is<IReadOnlyList<ProviderTrack>>(tracks => tracks.SequenceEqual(added.Select(play => play.Track))), cts.Token), Times.Once);
 	}
 
 	[Fact]
 	public async Task Fails_the_job_when_the_added_plays_cannot_be_resolved()
 	{
 		_service.Setup(service => service.Run(It.IsAny<CancellationToken>())).ReturnsAsync(new SyncListenHistoryResponse(0, [], null));
-		_resolvePlays.Setup(resolve => resolve.Run(It.IsAny<IReadOnlyList<Play>>(), It.IsAny<CancellationToken>()))
-			.ReturnsAsync(new List<IResolvePlaysError> { new UnableToReadCatalogueError("database is locked") });
+		_resolvePlays.Setup(resolve => resolve.Run(It.IsAny<IReadOnlyList<ProviderTrack>>(), It.IsAny<CancellationToken>()))
+			.ReturnsAsync(new List<IResolveProviderTracksError> { new UnableToReadCatalogueError("database is locked") });
 
 		await Assert.ThrowsAsync<JobFailedException>(() => Handler().Execute(CancellationToken.None));
 	}
@@ -56,7 +57,7 @@ public class SyncListenHistoryJobHandlerTests
 
 		await Assert.ThrowsAsync<JobFailedException>(() => Handler().Execute(CancellationToken.None));
 
-		_resolvePlays.Verify(resolve => resolve.Run(It.IsAny<IReadOnlyList<Play>>(), It.IsAny<CancellationToken>()), Times.Never);
+		_resolvePlays.Verify(resolve => resolve.Run(It.IsAny<IReadOnlyList<ProviderTrack>>(), It.IsAny<CancellationToken>()), Times.Never);
 	}
 
 	[Fact]
