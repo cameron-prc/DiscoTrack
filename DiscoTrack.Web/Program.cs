@@ -20,6 +20,8 @@ builder.Services
 	.AddSpotifyConnection(builder.Configuration)
 	.AddSpotifyListenHistorySource()
 	.AddSqliteListenHistory()
+	.AddSpotifyPlaylistSource()
+	.AddSqlitePlaylists()
 	.AddJobs()
 	.AddInMemoryJobQueue()
 	.AddJobBackgroundService();

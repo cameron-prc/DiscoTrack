@@ -1,0 +1,133 @@
+@page "/playlists"
+@inject IPlaylists PlaylistStore
+@inject IAddPlaylistService AddPlaylistService
+@inject IJobQueue JobQueue
+@rendermode InteractiveServer
+
+<PageTitle>Playlists</PageTitle>
+
+<h1>Playlists</h1>
+
+<h2>Add a playlist</h2>
+
+<form @onsubmit="AddPlaylist">
+	<label>
+		Spotify playlist link
+		<input type="text" @bind="_reference" placeholder="https://open.spotify.com/playlist/..." size="60" disabled="@_adding" />
+	</label>
+	<button type="submit" disabled="@_adding">Add</button>
+</form>
+
+@if (_message is not null)
+{
+	<p>@_message</p>
+}
+
+<h2>Added playlists</h2>
+
+@if (_loading)
+{
+	<p>Loading</p>
+}
+else
+{
+	<p>count: @_playlists.Count</p>
+	<table>
+		<thead>
+			<tr>
+				<th>Name</th>
+				<th>Owner</th>
+				<th>Items</th>
+				<th>Last copied</th>
+				<th></th>
+				<th></th>
+			</tr>
+		</thead>
+		<tbody>
+			@foreach (var playlist in _playlists)
+			{
+				<tr>
+					<td>
+						<a href="/playlists/@playlist.Id">@playlist.Name</a>
+						@if (playlist.RemovedAt is not null)
+						{
+							<span> (no longer on Spotify)</span>
+						}
+					</td>
+					<td>@playlist.OwnerName</td>
+					<td>@playlist.ItemCount</td>
+					<td>@(playlist.LastImportedAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "not yet")</td>
+					<td>
+						@if (playlist.HasChangedSinceImport)
+						{
+							<span>changed</span>
+						}
+					</td>
+					<td><button @onclick="() => Untrack(playlist)">Remove</button></td>
+				</tr>
+			}
+		</tbody>
+	</table>
+}
+
+@code {
+	private bool _loading = true;
+	private bool _adding;
+	private string _reference = "";
+	private string? _message;
+	private IReadOnlyList<Playlist> _playlists = [];
+
+	protected override async Task OnInitializedAsync()
+	{
+		await LoadPlaylists();
+		_loading = false;
+	}
+
+	private async Task LoadPlaylists()
+	{
+		_playlists = (await PlaylistStore.GetPlaylists(CancellationToken.None))
+			.Where(playlist => playlist.Tracked)
+			.ToList();
+	}
+
+	// Adding a playlist copies it straight away; the playlists sync keeps it up to date from then on
+	private async Task AddPlaylist()
+	{
+		_adding = true;
+		_message = null;
+
+		var result = await AddPlaylistService.Run(_reference, CancellationToken.None);
+
+		if (result.IsLeft)
+		{
+			_message = result.GetLeft[0] switch
+			{
+				UnrecognisedPlaylistReferenceError => "That is not a Spotify playlist link.",
+				UnableToFindPlaylistAtSourceError => "Spotify has no playlist at that link, or it is private to someone else.",
+				UnableToReadPlaylistSourceError error => $"Spotify could not be read: {error.Message}",
+				_ => "The playlist could not be added.",
+			};
+		}
+		else
+		{
+			var playlist = result.GetRight.Playlist;
+
+			await JobQueue.Enqueue(new Job(JobType.SyncPlaylist, playlist.Id), CancellationToken.None);
+			_message = result.GetRight.AlreadyTracked
+				? $"{playlist.Name} was already added. It is being copied again."
+				: $"{playlist.Name} added. Its {playlist.ItemCount} items are being copied.";
+			_reference = "";
+			await LoadPlaylists();
+		}
+
+		_adding = false;
+	}
+
+	// The playlist and the items already copied are kept; it is no longer updated
+	private async Task Untrack(Playlist playlist)
+	{
+		playlist.Tracked = false;
+		await PlaylistStore.SavePlaylist(playlist, CancellationToken.None);
+		await LoadPlaylists();
+	}
+}

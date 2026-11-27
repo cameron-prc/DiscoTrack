@@ -208,6 +208,7 @@ internal static class Extensions
 			Provider.SpotifyAlbum => new SpotifyAlbumId(value),
 			Provider.SpotifyTrack => new SpotifyTrackId(value),
 			Provider.Isrc => new Isrc(value),
+			Provider.SpotifyPlaylist => new SpotifyPlaylistId(value),
 			_ => throw new ArgumentOutOfRangeException(nameof(provider), provider, null),
 		};
 	}

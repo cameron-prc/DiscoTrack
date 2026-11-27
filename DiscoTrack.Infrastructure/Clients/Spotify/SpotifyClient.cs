@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using DiscoTrack.Infrastructure.Clients.Spotify.Models;
@@ -12,6 +13,9 @@ public class SpotifyClient(HttpClient http) : ISpotifyClient
 		PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
 	};
 
+	// What describes a playlist, without its items
+	private const string PlaylistFields = "id,name,description,snapshot_id,owner(id,display_name),tracks(total)";
+
 	public async Task<IReadOnlyList<PlayHistory>> GetRecentlyPlayed(int limit, long? afterUnixMilliseconds, CancellationToken ct)
 	{
 		var query = new Dictionary<string, string> { ["limit"] = limit.ToString() };
@@ -22,17 +26,45 @@ public class SpotifyClient(HttpClient http) : ISpotifyClient
 
 		var queryString = string.Join("&", query.Select(p => $"{p.Key}={Uri.EscapeDataString(p.Value)}"));
 
-		using var response = await http.GetAsync($"{SpotifyRoutes.RecentlyPlayed}?{queryString}", ct);
+		var page = await Get<RecentlyPlayedResponse>($"{SpotifyRoutes.RecentlyPlayed}?{queryString}", ct);
 
+		return page.Items;
+	}
+
+
+	public async Task<Playlist?> GetPlaylist(string playlistId, CancellationToken ct)
+	{
+		using var response = await http.GetAsync($"{SpotifyRoutes.Playlists}/{Uri.EscapeDataString(playlistId)}?fields={PlaylistFields}", ct);
+
+		if (response.StatusCode == HttpStatusCode.NotFound)
+		{
+			return null;
+		}
+
+		return await Read<Playlist>(response, ct);
+	}
+
+	public Task<Page<PlaylistItem>> GetPlaylistItems(string playlistId, int limit, int offset, CancellationToken ct)
+	{
+		return Get<Page<PlaylistItem>>($"{SpotifyRoutes.Playlists}/{Uri.EscapeDataString(playlistId)}/tracks?limit={limit}&offset={offset}", ct);
+	}
+
+	private async Task<T> Get<T>(string path, CancellationToken ct)
+	{
+		using var response = await http.GetAsync(path, ct);
+
+		return await Read<T>(response, ct);
+	}
+
+	private static async Task<T> Read<T>(HttpResponseMessage response, CancellationToken ct)
+	{
 		if (!response.IsSuccessStatusCode)
 		{
 			throw new SpotifyException(await ReadError(response, ct) ?? $"Spotify returned status {(int)response.StatusCode} with no message.");
 		}
 
-		var page = await response.Content.ReadFromJsonAsync<RecentlyPlayedResponse>(Json, ct)
+		return await response.Content.ReadFromJsonAsync<T>(Json, ct)
 			?? throw new SpotifyException("Empty response from Spotify.");
-
-		return page.Items;
 	}
 
 	private static async Task<string?> ReadError(HttpResponseMessage response, CancellationToken ct)

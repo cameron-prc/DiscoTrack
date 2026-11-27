@@ -1,0 +1,82 @@
+@page "/playlists/{Id:guid}"
+@inject IPlaylists PlaylistStore
+@inject IJobQueue JobQueue
+@rendermode InteractiveServer
+
+@if (_loading)
+{
+	<p>Loading</p>
+}
+else if (_playlist is null)
+{
+	<PageTitle>Playlist not found</PageTitle>
+	<p>Playlist not found</p>
+}
+else
+{
+	<PageTitle>@_playlist.Name</PageTitle>
+
+	<h1>@_playlist.Name</h1>
+
+	<ul>
+		<li>owner: @_playlist.OwnerName</li>
+		<li>description: @_playlist.Description</li>
+		<li>items listed by the provider: @_playlist.ItemCount</li>
+		<li>songs copied: @_items.Count</li>
+		<li>tracked: @_playlist.Tracked</li>
+		<li>last copied: @(_playlist.LastImportedAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "never")</li>
+		@if (_playlist.RemovedAt is { } removedAt)
+		{
+			<li>no longer listed by the provider since @removedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</li>
+		}
+	</ul>
+
+	<button @onclick="SyncPlaylist">Copy now</button>
+
+	<table>
+		<thead>
+			<tr>
+				<th>#</th>
+				<th>Track</th>
+				<th>Artists</th>
+				<th>Album</th>
+				<th>Added</th>
+			</tr>
+		</thead>
+		<tbody>
+			@foreach (var item in _items)
+			{
+				<tr>
+					<td>@item.Position</td>
+					<td>@item.Track.Title</td>
+					<td>@string.Join(", ", item.Track.Artists.Select(artist => artist.Name))</td>
+					<td>@item.Track.AlbumTitle</td>
+					<td>@(item.AddedAt?.ToLocalTime().ToString("dd/MM/yyyy"))</td>
+				</tr>
+			}
+		</tbody>
+	</table>
+}
+
+@code {
+	[Parameter]
+	public Guid Id { get; set; }
+
+	private bool _loading = true;
+	private Playlist? _playlist;
+	private IReadOnlyList<PlaylistItem> _items = [];
+
+	protected override async Task OnParametersSetAsync()
+	{
+		var playlistId = new PlaylistId(Id);
+
+		_playlist = await PlaylistStore.GetPlaylist(playlistId, CancellationToken.None);
+		_items = _playlist is null ? [] : await PlaylistStore.GetItems(playlistId, CancellationToken.None);
+		_loading = false;
+	}
+
+	private async Task SyncPlaylist()
+	{
+		await JobQueue.Enqueue(new Job(JobType.SyncPlaylist, _playlist!.Id), CancellationToken.None);
+	}
+}

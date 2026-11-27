@@ -2,6 +2,7 @@ using DiscoTrack.Albums;
 using DiscoTrack.Artists;
 using DiscoTrack.Jobs;
 using DiscoTrack.Jobs.JobHandlers;
+using DiscoTrack.Playlists;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
@@ -14,10 +15,12 @@ public class JobRunnerTests
 	private readonly Mock<ISyncArtistWithDiscographyJobHandler> _artistDiscographyHandler = new();
 	private readonly Mock<ISyncAllArtistsWithDiscographyJobHandler> _allArtistsDiscographyHandler = new();
 	private readonly Mock<ISyncListenHistoryJobHandler> _listenHistoryHandler = new();
+	private readonly Mock<ISyncPlaylistsJobHandler> _playlistsHandler = new();
+	private readonly Mock<ISyncPlaylistJobHandler> _playlistHandler = new();
 
 	private JobRunner Runner()
 	{
-		return new JobRunner(_handler.Object, _discographyHandler.Object, _artistDiscographyHandler.Object, _allArtistsDiscographyHandler.Object, _listenHistoryHandler.Object, NullLogger<JobRunner>.Instance);
+		return new JobRunner(_handler.Object, _discographyHandler.Object, _artistDiscographyHandler.Object, _allArtistsDiscographyHandler.Object, _listenHistoryHandler.Object, _playlistsHandler.Object, _playlistHandler.Object, NullLogger<JobRunner>.Instance);
 	}
 
 	[Fact]
@@ -87,6 +90,40 @@ public class JobRunnerTests
 
 		_listenHistoryHandler.Verify(h => h.Execute(cts.Token), Times.Once);
 		_handler.Verify(h => h.Execute(It.IsAny<CancellationToken>()), Times.Never);
+	}
+
+	[Fact]
+	public async Task Runs_the_sync_playlists_handler_for_a_sync_playlists_job()
+	{
+		using var cts = new CancellationTokenSource();
+
+		await Runner().Start(new Job(JobType.SyncPlaylists), cts.Token);
+
+		_playlistsHandler.Verify(h => h.Execute(cts.Token), Times.Once);
+		_handler.Verify(h => h.Execute(It.IsAny<CancellationToken>()), Times.Never);
+	}
+
+	[Fact]
+	public async Task Runs_the_sync_playlist_handler_with_the_jobs_playlist_id()
+	{
+		var playlistId = PlaylistId.New();
+		using var cts = new CancellationTokenSource();
+
+		await Runner().Start(new Job(JobType.SyncPlaylist, playlistId), cts.Token);
+
+		_playlistHandler.Verify(h => h.Execute(playlistId, cts.Token), Times.Once);
+		_playlistsHandler.Verify(h => h.Execute(It.IsAny<CancellationToken>()), Times.Never);
+	}
+
+	[Fact]
+	public async Task Fails_a_sync_playlist_job_that_has_no_playlist_id()
+	{
+		var job = new Job(JobType.SyncPlaylist);
+
+		await Runner().Start(job, CancellationToken.None);
+
+		Assert.Equal(JobStatus.Failed, job.Status);
+		_playlistHandler.Verify(h => h.Execute(It.IsAny<PlaylistId>(), It.IsAny<CancellationToken>()), Times.Never);
 	}
 
 	[Fact]

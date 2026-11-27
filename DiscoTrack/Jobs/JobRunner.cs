@@ -10,15 +10,19 @@ public class JobRunner : IJobRunner
 	private readonly ISyncArtistWithDiscographyJobHandler _syncArtistWithDiscographyJobHandler;
 	private readonly ISyncAllArtistsWithDiscographyJobHandler _syncAllArtistsWithDiscographyJobHandler;
 	private readonly ISyncListenHistoryJobHandler _syncListenHistoryJobHandler;
+	private readonly ISyncPlaylistsJobHandler _syncPlaylistsJobHandler;
+	private readonly ISyncPlaylistJobHandler _syncPlaylistJobHandler;
 	private readonly ILogger<JobRunner> _logger;
 
-	public JobRunner(ISyncLibraryHandler syncLibraryHandler, ISyncAlbumWithDiscographyJobHandler syncAlbumWithDiscographyJobHandler, ISyncArtistWithDiscographyJobHandler syncArtistWithDiscographyJobHandler, ISyncAllArtistsWithDiscographyJobHandler syncAllArtistsWithDiscographyJobHandler, ISyncListenHistoryJobHandler syncListenHistoryJobHandler, ILogger<JobRunner> logger)
+	public JobRunner(ISyncLibraryHandler syncLibraryHandler, ISyncAlbumWithDiscographyJobHandler syncAlbumWithDiscographyJobHandler, ISyncArtistWithDiscographyJobHandler syncArtistWithDiscographyJobHandler, ISyncAllArtistsWithDiscographyJobHandler syncAllArtistsWithDiscographyJobHandler, ISyncListenHistoryJobHandler syncListenHistoryJobHandler, ISyncPlaylistsJobHandler syncPlaylistsJobHandler, ISyncPlaylistJobHandler syncPlaylistJobHandler, ILogger<JobRunner> logger)
 	{
 		_syncLibraryHandler = syncLibraryHandler;
 		_syncAlbumWithDiscographyJobHandler = syncAlbumWithDiscographyJobHandler;
 		_syncArtistWithDiscographyJobHandler = syncArtistWithDiscographyJobHandler;
 		_syncAllArtistsWithDiscographyJobHandler = syncAllArtistsWithDiscographyJobHandler;
 		_syncListenHistoryJobHandler = syncListenHistoryJobHandler;
+		_syncPlaylistsJobHandler = syncPlaylistsJobHandler;
+		_syncPlaylistJobHandler = syncPlaylistJobHandler;
 		_logger = logger;
 	}
 
@@ -56,6 +60,9 @@ public class JobRunner : IJobRunner
 			JobType.SyncArtistWithDiscography => throw new InvalidOperationException($"{job.Type} job {job.Id} has no artist id"),
 			JobType.SyncAllArtistsWithDiscography => _syncAllArtistsWithDiscographyJobHandler.Execute(cancellationToken),
 			JobType.SyncListenHistory => _syncListenHistoryJobHandler.Execute(cancellationToken),
+			JobType.SyncPlaylists => _syncPlaylistsJobHandler.Execute(cancellationToken),
+			JobType.SyncPlaylist when job.PlaylistId is { } playlistId => _syncPlaylistJobHandler.Execute(playlistId, cancellationToken),
+			JobType.SyncPlaylist => throw new InvalidOperationException($"{job.Type} job {job.Id} has no playlist id"),
 			_ => throw new InvalidOperationException($"No handler for {job.Type} job {job.Id}"),
 		};
 	}

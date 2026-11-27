@@ -10,11 +10,13 @@ using DiscoTrack.Infrastructure.Discography;
 using DiscoTrack.Infrastructure.Jobs;
 using DiscoTrack.Infrastructure.Library;
 using DiscoTrack.Infrastructure.ListenHistory;
+using DiscoTrack.Infrastructure.Playlists;
 using DiscoTrack.Infrastructure.Sqlite;
 using DiscoTrack.Infrastructure.Tokens;
 using DiscoTrack.Jobs;
 using DiscoTrack.Library;
 using DiscoTrack.ListenHistory;
+using DiscoTrack.Playlists;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -101,11 +103,35 @@ public static class DependencyInjection
 
 	public static IServiceCollection AddSpotifyListenHistorySource(this IServiceCollection services)
 	{
+		services.AddSpotifyClient();
+		services.AddScoped<IListenHistorySource, SpotifyListenHistorySource>();
+		return services;
+	}
+
+	public static IServiceCollection AddSpotifyPlaylistSource(this IServiceCollection services)
+	{
+		services.AddSpotifyClient();
+		services.AddScoped<IPlaylistSource, SpotifyPlaylistSource>();
+		return services;
+	}
+
+	public static IServiceCollection AddSqlitePlaylists(this IServiceCollection services)
+	{
+		services.AddScoped<IPlaylists, SqlitePlaylists>();
+		return services;
+	}
+
+	// Both Spotify sources share the one client; it is registered once however many of them are added
+	private static void AddSpotifyClient(this IServiceCollection services)
+	{
+		if (services.Any(service => service.ServiceType == typeof(ISpotifyClient)))
+		{
+			return;
+		}
+
 		services.AddHttpClient<ISpotifyClient, SpotifyClient>((provider, http) =>
 				http.BaseAddress = new Uri(provider.GetRequiredService<IOptions<SpotifyOptions>>().Value.ApiBaseUrl.TrimEnd('/') + "/"))
 			.AddHttpMessageHandler<SpotifyAuthorisationHandler>();
-		services.AddScoped<IListenHistorySource, SpotifyListenHistorySource>();
-		return services;
 	}
 
 	public static IServiceCollection AddSqliteListenHistory(this IServiceCollection services)

@@ -9,6 +9,10 @@ using DiscoTrack.ListenHistory.SyncListenHistory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using DiscoTrack.Playlists;
+using DiscoTrack.Playlists.AddPlaylist;
+using DiscoTrack.Playlists.ImportPlaylist;
+using DiscoTrack.Playlists.SyncPlaylists;
 using Moq;
 
 namespace DiscoTrack.Tests;
@@ -82,6 +86,18 @@ public class DependencyInjectionTests
 		Assert.IsType<ResolveProviderTracksService>(scope.ServiceProvider.GetRequiredService<IResolveProviderTracksService>());
 	}
 
+	[Fact]
+	public void AddJobs_resolves_the_playlist_handlers_and_services()
+	{
+		using var scope = BuildProvider().CreateScope();
+
+		Assert.IsType<SyncPlaylistsJobHandler>(scope.ServiceProvider.GetRequiredService<ISyncPlaylistsJobHandler>());
+		Assert.IsType<SyncPlaylistJobHandler>(scope.ServiceProvider.GetRequiredService<ISyncPlaylistJobHandler>());
+		Assert.IsType<SyncPlaylistsService>(scope.ServiceProvider.GetRequiredService<ISyncPlaylistsService>());
+		Assert.IsType<ImportPlaylistService>(scope.ServiceProvider.GetRequiredService<IImportPlaylistService>());
+		Assert.IsType<AddPlaylistService>(scope.ServiceProvider.GetRequiredService<IAddPlaylistService>());
+	}
+
 	private static ServiceProvider BuildProvider()
 	{
 		return new ServiceCollection()
@@ -90,6 +106,8 @@ public class DependencyInjectionTests
 			.AddSingleton(Mock.Of<IDiscographySource>())
 			.AddSingleton(Mock.Of<IListenHistorySource>())
 			.AddSingleton(Mock.Of<IListenHistory>())
+			.AddSingleton(Mock.Of<IPlaylistSource>())
+			.AddSingleton(Mock.Of<IPlaylists>())
 			.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>))
 			.AddJobs()
 			.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });

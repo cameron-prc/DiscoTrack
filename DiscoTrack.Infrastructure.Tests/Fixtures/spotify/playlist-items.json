@@ -1,0 +1,100 @@
+{
+  "href": "https://api.spotify.com/v1/playlists/3cEYpjA9oz9GiPac4AsH4n/tracks?offset=0&limit=100",
+  "limit": 100,
+  "next": null,
+  "offset": 0,
+  "previous": null,
+  "total": 4,
+  "items": [
+    {
+      "added_at": "2026-07-06T07:10:05Z",
+      "added_by": { "external_urls": { "spotify": "https://open.spotify.com/user/example" }, "href": "https://api.spotify.com/v1/users/example", "id": "example", "type": "user", "uri": "spotify:user:example" },
+      "is_local": false,
+      "primary_color": null,
+      "track": {
+        "album": {
+          "album_type": "album",
+          "artists": [{ "id": "7MqnCTCAX6SsIYYdJCQj9B", "name": "Pendulum", "type": "artist", "uri": "spotify:artist:7MqnCTCAX6SsIYYdJCQj9B" }],
+          "id": "4LqcOTZN8DXzvzizsRjv9v",
+          "name": "Immersion",
+          "release_date": "2010-05-21",
+          "release_date_precision": "day",
+          "total_tracks": 15,
+          "type": "album",
+          "uri": "spotify:album:4LqcOTZN8DXzvzizsRjv9v"
+        },
+        "artists": [
+          { "id": "7MqnCTCAX6SsIYYdJCQj9B", "name": "Pendulum", "type": "artist", "uri": "spotify:artist:7MqnCTCAX6SsIYYdJCQj9B" },
+          { "id": "57ylwQTnFnIhJh4nu4rxCs", "name": "In Flames", "type": "artist", "uri": "spotify:artist:57ylwQTnFnIhJh4nu4rxCs" }
+        ],
+        "disc_number": 1,
+        "duration_ms": 285000,
+        "episode": false,
+        "explicit": false,
+        "external_ids": { "isrc": "GBAHT1000190" },
+        "id": "6tC2iHfUlzB2W4ntXXL2BH",
+        "is_local": false,
+        "name": "Self vs Self",
+        "popularity": 48,
+        "preview_url": null,
+        "track": true,
+        "track_number": 12,
+        "type": "track",
+        "uri": "spotify:track:6tC2iHfUlzB2W4ntXXL2BH"
+      },
+      "video_thumbnail": { "url": null }
+    },
+    {
+      "added_at": "2026-07-07T09:00:00Z",
+      "added_by": { "id": "example", "type": "user", "uri": "spotify:user:example" },
+      "is_local": false,
+      "primary_color": null,
+      "track": {
+        "album": { "id": "4rPodcastShowId0000000A", "name": "A Podcast", "type": "album" },
+        "artists": [{ "id": null, "name": "A Podcast", "type": "show" }],
+        "disc_number": 0,
+        "duration_ms": 3600000,
+        "episode": true,
+        "external_ids": {},
+        "id": "7EpisodeId00000000000B",
+        "is_local": false,
+        "name": "Episode 12",
+        "track": false,
+        "track_number": 0,
+        "type": "episode",
+        "uri": "spotify:episode:7EpisodeId00000000000B"
+      },
+      "video_thumbnail": { "url": null }
+    },
+    {
+      "added_at": "2026-07-08T09:00:00Z",
+      "added_by": { "id": "example", "type": "user", "uri": "spotify:user:example" },
+      "is_local": true,
+      "primary_color": null,
+      "track": {
+        "album": { "id": null, "name": "Bootleg", "type": "album" },
+        "artists": [{ "id": null, "name": "Unknown", "type": "artist" }],
+        "disc_number": 0,
+        "duration_ms": 200000,
+        "episode": false,
+        "external_ids": {},
+        "id": null,
+        "is_local": true,
+        "name": "Live in a Field",
+        "track": true,
+        "track_number": 0,
+        "type": "track",
+        "uri": "spotify:local:Unknown:Bootleg:Live+in+a+Field:200"
+      },
+      "video_thumbnail": { "url": null }
+    },
+    {
+      "added_at": "2026-07-09T09:00:00Z",
+      "added_by": { "id": "example", "type": "user", "uri": "spotify:user:example" },
+      "is_local": false,
+      "primary_color": null,
+      "track": null,
+      "video_thumbnail": { "url": null }
+    }
+  ]
+}

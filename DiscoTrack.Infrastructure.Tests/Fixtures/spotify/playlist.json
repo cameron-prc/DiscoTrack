@@ -1,0 +1,13 @@
+{
+  "description": "For the drive north",
+  "id": "3cEYpjA9oz9GiPac4AsH4n",
+  "name": "Road Trip",
+  "owner": {
+    "display_name": "Example Listener",
+    "id": "example"
+  },
+  "snapshot_id": "AAAAEnSnapshotOne",
+  "tracks": {
+    "total": 42
+  }
+}
