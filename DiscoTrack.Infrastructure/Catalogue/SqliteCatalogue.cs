@@ -3,6 +3,7 @@ using Dapper;
 using DiscoTrack.Albums;
 using DiscoTrack.Artists;
 using DiscoTrack.Catalogue;
+using DiscoTrack.ExternalIds;
 using DiscoTrack.Infrastructure.Catalogue.Dtos;
 using DiscoTrack.Infrastructure.Sqlite;
 using DiscoTrack.Tracks;
@@ -57,6 +58,24 @@ public class SqliteCatalogue(IOptions<SqliteOptions> options) : ICatalogue
 		""";
 
 	private const string SelectArtist = "SELECT Id, Name, Disambiguation, Tracked FROM Artists WHERE Id = @ArtistId";
+
+	private const string SelectTrackAlbumsByExternalId = """
+		SELECT e.Value, t.AlbumId AS Id
+		FROM TrackExternalIds e
+		JOIN Tracks t ON t.Id = e.TrackId
+		WHERE e.Provider = @Provider AND e.Value IN @Values
+		ORDER BY t.AlbumId
+		""";
+
+	private const string SelectArtistsByExternalId = """
+		SELECT Value, ArtistId AS Id
+		FROM ArtistExternalIds
+		WHERE Provider = @Provider AND Value IN @Values
+		ORDER BY ArtistId
+		""";
+
+	// Well under the number of parameters SQLite allows in one statement
+	private const int ExternalIdBatchSize = 500;
 
 	private const string SelectArtistExternalIdsByArtist = "SELECT ArtistId, Provider, Value FROM ArtistExternalIds WHERE ArtistId = @ArtistId";
 
@@ -349,6 +368,49 @@ public class SqliteCatalogue(IOptions<SqliteOptions> options) : ICatalogue
 				)
 			)
 			.ToList();
+	}
+
+	public async Task<IReadOnlyDictionary<ExternalId, AlbumId>> FindTrackAlbums(IReadOnlyCollection<ExternalId> trackIds, CancellationToken ct)
+	{
+		return (await FindByExternalId(SelectTrackAlbumsByExternalId, trackIds, ct))
+			.ToDictionary(found => found.Key, found => new AlbumId(found.Value));
+	}
+
+	public async Task<IReadOnlyDictionary<ExternalId, ArtistId>> FindArtists(IReadOnlyCollection<ExternalId> artistIds, CancellationToken ct)
+	{
+		return (await FindByExternalId(SelectArtistsByExternalId, artistIds, ct))
+			.ToDictionary(found => found.Key, found => new ArtistId(found.Value));
+	}
+
+	// When several entities hold an id, the one with the lowest id is taken, so the answer does not change between calls
+	private async Task<Dictionary<ExternalId, Guid>> FindByExternalId(string sql, IReadOnlyCollection<ExternalId> externalIds, CancellationToken ct)
+	{
+		var found = new Dictionary<ExternalId, Guid>();
+
+		if (externalIds.Count == 0)
+		{
+			return found;
+		}
+
+		await using var connection = new SqliteConnection(_connectionString);
+		await connection.OpenAsync(ct);
+
+		foreach (var providerIds in externalIds.Distinct().GroupBy(externalId => externalId.Provider))
+		{
+			var byValue = providerIds.ToDictionary(externalId => externalId.Value);
+
+			foreach (var values in byValue.Keys.Chunk(ExternalIdBatchSize))
+			{
+				var rows = await connection.QueryAsync<(string Value, string Id)>(sql, new { Provider = providerIds.Key.ToString(), Values = values });
+
+				foreach (var row in rows)
+				{
+					found.TryAdd(byValue[row.Value], Guid.Parse(row.Id));
+				}
+			}
+		}
+
+		return found;
 	}
 
 	public async Task SaveArtist(Artist artist, CancellationToken ct)

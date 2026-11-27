@@ -1,6 +1,7 @@
 using DiscoTrack.Albums;
 using DiscoTrack.Artists;
 using DiscoTrack.Catalogue;
+using DiscoTrack.ExternalIds;
 using DiscoTrack.Tracks;
 
 namespace DiscoTrack.Tests.Library;
@@ -80,6 +81,25 @@ internal sealed class FakeCatalogue : ICatalogue
 		Record(nameof(SaveAlbumTracks));
 		Tracks[albumId] = tracks;
 		return Task.CompletedTask;
+	}
+
+	public Task<IReadOnlyDictionary<ExternalId, AlbumId>> FindTrackAlbums(IReadOnlyCollection<ExternalId> trackIds, CancellationToken ct)
+	{
+		Record(nameof(FindTrackAlbums));
+		return Task.FromResult<IReadOnlyDictionary<ExternalId, AlbumId>>(Tracks.Values
+			.SelectMany(tracks => tracks)
+			.SelectMany(track => track.ExternalIds.Where(trackIds.Contains).Select(externalId => (ExternalId: externalId, track.AlbumId)))
+			.DistinctBy(found => found.ExternalId)
+			.ToDictionary(found => found.ExternalId, found => found.AlbumId));
+	}
+
+	public Task<IReadOnlyDictionary<ExternalId, ArtistId>> FindArtists(IReadOnlyCollection<ExternalId> artistIds, CancellationToken ct)
+	{
+		Record(nameof(FindArtists));
+		return Task.FromResult<IReadOnlyDictionary<ExternalId, ArtistId>>(Artists
+			.SelectMany(artist => artist.ExternalIds.Where(artistIds.Contains).Select(externalId => (ExternalId: externalId, artist.Id)))
+			.DistinctBy(found => found.ExternalId)
+			.ToDictionary(found => found.ExternalId, found => found.Id));
 	}
 
 	public Task MergeArtists(Artist survivor, ArtistId absorbed, CancellationToken ct)

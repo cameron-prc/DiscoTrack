@@ -833,6 +833,61 @@ public sealed class SqliteCatalogueTests : IDisposable
 		}
 	}
 
+	[Fact]
+	public async Task FindTrackAlbums_returns_the_album_of_each_track_holding_one_of_the_ids()
+	{
+		var tool = Artist("art-tool", "Tool");
+		var lateralus = Album("alb-lateralus", "Lateralus", 2001, Credit(tool, 1));
+		var aenima = Album("alb-aenima", "Ænima", 1996, Credit(tool, 1));
+		await _catalogue.SaveArtist(tool, CancellationToken.None);
+		await _catalogue.SaveAlbum(lateralus, CancellationToken.None);
+		await _catalogue.SaveAlbum(aenima, CancellationToken.None);
+		var schism = Track(lateralus, 1, 5, "Schism");
+		schism.ExternalIds = [new SpotifyTrackId("sp-schism"), new Isrc("USVR10100102")];
+		var stinkfist = Track(aenima, 1, 1, "Stinkfist");
+		stinkfist.ExternalIds = [new SpotifyTrackId("sp-stinkfist")];
+		await _catalogue.SaveAlbumTracks(lateralus.Id, [schism, Track(lateralus, 1, 1, "The Grudge")], CancellationToken.None);
+		await _catalogue.SaveAlbumTracks(aenima.Id, [stinkfist], CancellationToken.None);
+
+		var found = await _catalogue.FindTrackAlbums(
+			[new SpotifyTrackId("sp-schism"), new SpotifyTrackId("sp-stinkfist"), new SpotifyTrackId("sp-unknown"), new Isrc("USVR10100102"), new SpotifyTrackId("sp-schism")],
+			CancellationToken.None);
+
+		Assert.Equal(3, found.Count);
+		Assert.Equal(lateralus.Id, found[new SpotifyTrackId("sp-schism")]);
+		Assert.Equal(lateralus.Id, found[new Isrc("USVR10100102")]);
+		Assert.Equal(aenima.Id, found[new SpotifyTrackId("sp-stinkfist")]);
+	}
+
+	[Fact]
+	public async Task FindTrackAlbums_does_not_confuse_the_same_value_under_another_provider()
+	{
+		var lateralus = Album("alb-lateralus", "Lateralus", 2001);
+		await _catalogue.SaveAlbum(lateralus, CancellationToken.None);
+		var schism = Track(lateralus, 1, 5, "Schism");
+		schism.ExternalIds = [new SubsonicId("shared-value")];
+		await _catalogue.SaveAlbumTracks(lateralus.Id, [schism], CancellationToken.None);
+
+		Assert.Empty(await _catalogue.FindTrackAlbums([new SpotifyTrackId("shared-value")], CancellationToken.None));
+		Assert.Empty(await _catalogue.FindTrackAlbums([], CancellationToken.None));
+	}
+
+	[Fact]
+	public async Task FindArtists_returns_the_artist_holding_each_of_the_ids()
+	{
+		var tool = Artist("art-tool", "Tool");
+		tool.ExternalIds = [new SubsonicId("art-tool"), new SpotifyArtistId("sp-tool")];
+		var puscifer = Artist("art-puscifer", "Puscifer");
+		await _catalogue.SaveArtist(tool, CancellationToken.None);
+		await _catalogue.SaveArtist(puscifer, CancellationToken.None);
+
+		var found = await _catalogue.FindArtists([new SpotifyArtistId("sp-tool"), new SubsonicId("art-puscifer"), new SpotifyArtistId("sp-unknown")], CancellationToken.None);
+
+		Assert.Equal(2, found.Count);
+		Assert.Equal(tool.Id, found[new SpotifyArtistId("sp-tool")]);
+		Assert.Equal(puscifer.Id, found[new SubsonicId("art-puscifer")]);
+	}
+
 	private static Artist Artist(string subsonicId, string name)
 	{
 		return new Artist { ExternalIds = [new SubsonicId(subsonicId)], Name = name };
