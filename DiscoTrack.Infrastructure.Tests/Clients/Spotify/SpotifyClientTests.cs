@@ -50,6 +50,7 @@ public class SpotifyClientTests
 		Assert.Equal("6tC2iHfUlzB2W4ntXXL2BH", played.Track.Id);
 		Assert.Equal("Self vs Self", played.Track.Name);
 		Assert.Equal(285000, played.Track.DurationMs);
+		Assert.Equal((1, 12), (played.Track.DiscNumber, played.Track.TrackNumber));
 		Assert.Equal("GBAHT1000190", played.Track.ExternalIds!.Isrc);
 		Assert.Equal(["Pendulum", "In Flames"], played.Track.Artists!.Select(artist => artist.Name));
 		Assert.Equal("4LqcOTZN8DXzvzizsRjv9v", played.Track.Album!.Id);

@@ -4,6 +4,7 @@ using DiscoTrack.Jobs;
 using DiscoTrack.Jobs.JobHandlers;
 using DiscoTrack.Library;
 using DiscoTrack.ListenHistory;
+using DiscoTrack.ListenHistory.ResolvePlays;
 using DiscoTrack.ListenHistory.SyncListenHistory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -78,6 +79,7 @@ public class DependencyInjectionTests
 
 		Assert.IsType<SyncListenHistoryJobHandler>(handler);
 		Assert.IsType<SyncListenHistoryService>(service);
+		Assert.IsType<ResolvePlaysService>(scope.ServiceProvider.GetRequiredService<IResolvePlaysService>());
 	}
 
 	private static ServiceProvider BuildProvider()

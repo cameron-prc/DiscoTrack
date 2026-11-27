@@ -171,6 +171,7 @@ public class SubsonicLibrarySourceTests
 			{
 				Id = "song-tiny", Title = "Tiny Monsters", AlbumId = "alb-parole", DiscNumber = 2, Track = 3, Duration = 268,
 				MusicBrainzId = "rec-tiny",
+				Isrc = ["uspu11100003", ""],
 				Artists = [new ArtistID3 { Id = "art-puscifer", Name = "Puscifer" }, new ArtistID3 { Id = "art-carina", Name = "Carina Round" }],
 			},
 		];
@@ -184,6 +185,7 @@ public class SubsonicLibrarySourceTests
 		Assert.Equal(3, track.TrackNumber);
 		Assert.Equal(268, track.DurationSeconds);
 		Assert.Equal(new MusicBrainzRecordingId("rec-tiny"), track.MusicBrainzId);
+		Assert.Equal([new Isrc("USPU11100003")], track.Isrcs);
 		Assert.Equal([new LibraryArtist(new SubsonicId("art-puscifer"), "Puscifer"), new LibraryArtist(new SubsonicId("art-carina"), "Carina Round")], track.Artists);
 	}
 

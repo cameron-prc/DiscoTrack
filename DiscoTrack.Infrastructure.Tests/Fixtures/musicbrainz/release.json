@@ -33,6 +33,7 @@
             "id": "f2d2a5f1-0000-4000-8000-00000000000a",
             "title": "The Grudge",
             "length": 515000,
+            "isrcs": ["USVR10100101"],
             "video": false,
             "artist-credit": [
               {
@@ -58,6 +59,7 @@
             "id": "f2d2a5f1-0000-4000-8000-00000000000b",
             "title": "Eon Blue Apocalypse",
             "length": 64000,
+            "isrcs": [],
             "video": false
           }
         }

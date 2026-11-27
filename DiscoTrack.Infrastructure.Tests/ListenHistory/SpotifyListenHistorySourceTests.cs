@@ -57,7 +57,7 @@ public class SpotifyListenHistorySourceTests
 			PlayedAt = PlayedAt,
 			Track = new Track
 			{
-				Id = "trk-self", Name = "Self vs Self", DurationMs = 285000,
+				Id = "trk-self", Name = "Self vs Self", DurationMs = 285000, DiscNumber = 1, TrackNumber = 12,
 				ExternalIds = new TrackExternalIds { Isrc = "GBAHT1000190" },
 				Artists = [new Artist { Id = "art-pendulum", Name = "Pendulum" }, new Artist { Id = "art-in-flames", Name = "In Flames" }],
 				Album = new Album { Id = "alb-immersion", Name = "Immersion" },
@@ -71,6 +71,7 @@ public class SpotifyListenHistorySourceTests
 		Assert.Equal("Self vs Self", play.TrackTitle);
 		Assert.Equal("GBAHT1000190", play.Isrc);
 		Assert.Equal(285000, play.DurationMs);
+		Assert.Equal((1, 12), (play.DiscNumber, play.TrackNumber));
 		Assert.Equal([new PlayArtist(new SpotifyArtistId("art-pendulum"), "Pendulum"), new PlayArtist(new SpotifyArtistId("art-in-flames"), "In Flames")], play.Artists);
 		Assert.Equal(new SpotifyAlbumId("alb-immersion"), play.AlbumId);
 		Assert.Equal("Immersion", play.AlbumTitle);

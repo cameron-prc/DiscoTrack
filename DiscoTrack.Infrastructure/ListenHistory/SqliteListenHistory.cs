@@ -16,14 +16,14 @@ public class SqliteListenHistory(IOptions<SqliteOptions> options) : IListenHisto
 	private const string SelectLatestPlayedAt = "SELECT MAX(PlayedAt) FROM Plays WHERE TrackProvider = @TrackProvider";
 
 	private const string InsertPlay = """
-		INSERT OR IGNORE INTO Plays (Id, PlayedAt, TrackProvider, TrackValue, TrackTitle, Isrc, DurationMs, AlbumProvider, AlbumValue, AlbumTitle)
-		VALUES (@Id, @PlayedAt, @TrackProvider, @TrackValue, @TrackTitle, @Isrc, @DurationMs, @AlbumProvider, @AlbumValue, @AlbumTitle)
+		INSERT OR IGNORE INTO Plays (Id, PlayedAt, TrackProvider, TrackValue, TrackTitle, Isrc, DurationMs, DiscNumber, TrackNumber, AlbumProvider, AlbumValue, AlbumTitle)
+		VALUES (@Id, @PlayedAt, @TrackProvider, @TrackValue, @TrackTitle, @Isrc, @DurationMs, @DiscNumber, @TrackNumber, @AlbumProvider, @AlbumValue, @AlbumTitle)
 		""";
 
 	private const string InsertPlayArtist = "INSERT INTO PlayArtists (PlayId, Position, Provider, Value, Name) VALUES (@PlayId, @Position, @Provider, @Value, @Name)";
 
 	private const string SelectPlays = """
-		SELECT Id, PlayedAt, TrackProvider, TrackValue, TrackTitle, Isrc, DurationMs, AlbumProvider, AlbumValue, AlbumTitle
+		SELECT Id, PlayedAt, TrackProvider, TrackValue, TrackTitle, Isrc, DurationMs, DiscNumber, TrackNumber, AlbumProvider, AlbumValue, AlbumTitle
 		FROM Plays
 		ORDER BY PlayedAt DESC, Id
 		LIMIT @Limit OFFSET @Offset
@@ -45,13 +45,13 @@ public class SqliteListenHistory(IOptions<SqliteOptions> options) : IListenHisto
 		return latest is null ? null : ParsePlayedAt(latest);
 	}
 
-	public async Task<int> AddPlays(IReadOnlyList<Play> plays, CancellationToken ct)
+	public async Task<IReadOnlyList<Play>> AddPlays(IReadOnlyList<Play> plays, CancellationToken ct)
 	{
 		await using var connection = new SqliteConnection(_connectionString);
 		await connection.OpenAsync(ct);
 		await using var transaction = await connection.BeginTransactionAsync(ct);
 
-		var added = 0;
+		var added = new List<Play>();
 
 		foreach (var play in plays)
 		{
@@ -62,7 +62,7 @@ public class SqliteListenHistory(IOptions<SqliteOptions> options) : IListenHisto
 			}
 
 			await connection.ExecuteAsync(InsertPlayArtist, play.Artists.Select((artist, index) => ToRow(play.Id, index + 1, artist)), transaction);
-			added++;
+			added.Add(play);
 		}
 
 		await transaction.CommitAsync(ct);
@@ -88,6 +88,8 @@ public class SqliteListenHistory(IOptions<SqliteOptions> options) : IListenHisto
 				TrackTitle = play.TrackTitle,
 				Isrc = play.Isrc,
 				DurationMs = play.DurationMs,
+				DiscNumber = play.DiscNumber,
+				TrackNumber = play.TrackNumber,
 				Artists = artists[play.Id].Select(artist => new PlayArtist(ToExternalId(artist.Provider, artist.Value), artist.Name)).ToList(),
 				AlbumId = play.AlbumProvider is null || play.AlbumValue is null ? null : ToExternalId(play.AlbumProvider, play.AlbumValue),
 				AlbumTitle = play.AlbumTitle,
@@ -119,6 +121,8 @@ public class SqliteListenHistory(IOptions<SqliteOptions> options) : IListenHisto
 			TrackTitle = play.TrackTitle,
 			Isrc = play.Isrc,
 			DurationMs = play.DurationMs,
+			DiscNumber = play.DiscNumber,
+			TrackNumber = play.TrackNumber,
 			AlbumProvider = play.AlbumId?.Provider.ToString(),
 			AlbumValue = play.AlbumId?.Value,
 			AlbumTitle = play.AlbumTitle,
@@ -146,6 +150,8 @@ public class SqliteListenHistory(IOptions<SqliteOptions> options) : IListenHisto
 		public string TrackTitle { get; init; } = "";
 		public string? Isrc { get; init; }
 		public int? DurationMs { get; init; }
+		public int? DiscNumber { get; init; }
+		public int? TrackNumber { get; init; }
 		public string? AlbumProvider { get; init; }
 		public string? AlbumValue { get; init; }
 		public string? AlbumTitle { get; init; }

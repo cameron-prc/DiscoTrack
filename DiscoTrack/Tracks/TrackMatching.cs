@@ -10,7 +10,11 @@ public static class TrackMatching
 	// a single release has one recording per place, so there the place is enough
 	public static Track? FindMatch(this IReadOnlyList<Track> tracks, IReadOnlyList<ExternalId> externalIds, int discNumber, int position, string title, bool anyRecording = false)
 	{
-		return tracks.FirstOrDefault(track => track.ExternalIds.Intersect(externalIds).Any())
+		var isrcs = externalIds.OfType<Isrc>().ToList();
+
+		// An ISRC names a recording but not which of its tracks, so the ids a provider gives the track itself come first
+		return tracks.FirstOrDefault(track => track.ExternalIds.Intersect(externalIds.Except(isrcs)).Any())
+			?? tracks.FirstOrDefault(track => track.ExternalIds.Intersect(isrcs).Any())
 			?? tracks.FirstOrDefault(track =>
 				track.DiscNumber == discNumber
 				&& track.Position == position

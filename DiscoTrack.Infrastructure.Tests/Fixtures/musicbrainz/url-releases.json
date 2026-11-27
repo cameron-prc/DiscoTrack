@@ -1,0 +1,37 @@
+{
+  "resource": "https://open.spotify.com/album/34gxHZG9TvQgrRDGpR8Y6c",
+  "relations": [
+    {
+      "type-id": "08445ccf-7b99-4438-9f9a-fb9ac18099ee",
+      "attribute-ids": {},
+      "end": null,
+      "ended": false,
+      "target-credit": "",
+      "attributes": [],
+      "direction": "backward",
+      "begin": null,
+      "type": "free streaming",
+      "release": {
+        "disambiguation": "",
+        "packaging": null,
+        "text-representation": {
+          "script": "Latn",
+          "language": "eng"
+        },
+        "date": "2020-07-31",
+        "id": "f6055c04-842b-4917-8f71-2211526ffa8c",
+        "packaging-id": null,
+        "status": null,
+        "title": "Collected Reworks Vol. 2",
+        "country": "AF",
+        "quality": "normal",
+        "barcode": "190295178680",
+        "status-id": null
+      },
+      "source-credit": "",
+      "target-type": "release",
+      "attribute-values": {}
+    }
+  ],
+  "id": "9a831ee9-fba5-4c5e-838b-01a78cca03a6"
+}

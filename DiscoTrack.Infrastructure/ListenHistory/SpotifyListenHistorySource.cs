@@ -36,6 +36,8 @@ public class SpotifyListenHistorySource(ISpotifyClient client) : IListenHistoryS
 			TrackTitle = track.Name,
 			Isrc = string.IsNullOrEmpty(track.ExternalIds?.Isrc) ? null : track.ExternalIds.Isrc,
 			DurationMs = track.DurationMs,
+			DiscNumber = track.DiscNumber,
+			TrackNumber = track.TrackNumber,
 			Artists = (track.Artists ?? [])
 				.Where(artist => artist.Id is not null)
 				.Select(artist => new PlayArtist(new SpotifyArtistId(artist.Id!), artist.Name))

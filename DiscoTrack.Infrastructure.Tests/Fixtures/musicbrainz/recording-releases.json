@@ -1,0 +1,158 @@
+{
+  "id": "7b6a8e9e-6094-402d-b939-40fdef1be95a",
+  "length": 396906,
+  "releases": [
+    {
+      "disambiguation": "deluxe version",
+      "date": "2010-05-10",
+      "barcode": null,
+      "media": [
+        {
+          "title": "",
+          "position": 1,
+          "id": "c4d37d9d-fc19-391d-85d3-2d7ba0f60c0c",
+          "track-count": 49,
+          "track-offset": 35,
+          "format": "Digital Media",
+          "format-id": "907a28d9-b3b2-3ef6-89a8-7b18d91d4794",
+          "tracks": [
+            {
+              "title": "Miami (Tim Fuchs remix)",
+              "id": "a56696dc-1112-4fd4-8818-508ffbbb3e9b",
+              "length": 396907,
+              "position": 36,
+              "number": "36"
+            }
+          ]
+        }
+      ],
+      "packaging-id": "119eba76-b343-3e02-a292-f0f00644bb9b",
+      "text-representation": {
+        "script": "Latn",
+        "language": "eng"
+      },
+      "country": "CA",
+      "packaging": "None",
+      "title": "Total Life Forever",
+      "status": "Official",
+      "status-id": "4e304316-386d-3409-af2e-78857eec5cfe",
+      "id": "f2a54ef7-df8f-49c1-bd4e-0ac45ec3150d",
+      "quality": "normal"
+    },
+    {
+      "disambiguation": "",
+      "date": "2010-07-02",
+      "barcode": null,
+      "media": [
+        {
+          "track-count": 5,
+          "track-offset": 4,
+          "tracks": [
+            {
+              "title": "Miami (Tim Fuchs remix)",
+              "length": 396000,
+              "id": "10d34bb0-3341-3a2c-83e2-7847e35d9945",
+              "number": "5",
+              "position": 5
+            }
+          ],
+          "format-id": "907a28d9-b3b2-3ef6-89a8-7b18d91d4794",
+          "format": "Digital Media",
+          "title": "",
+          "id": "e9b1ef0d-3f2c-3963-879e-3cfbac6a978b",
+          "position": 1
+        }
+      ],
+      "packaging-id": "119eba76-b343-3e02-a292-f0f00644bb9b",
+      "text-representation": {
+        "script": "Latn",
+        "language": "eng"
+      },
+      "country": "GB",
+      "packaging": "None",
+      "status": "Official",
+      "title": "Miami",
+      "status-id": "4e304316-386d-3409-af2e-78857eec5cfe",
+      "id": "3982c892-faea-4ed9-936f-f9641ace6b35",
+      "quality": "normal"
+    },
+    {
+      "id": "f6055c04-842b-4917-8f71-2211526ffa8c",
+      "status": "Official",
+      "title": "Collected Reworks Vol. 2",
+      "status-id": "4e304316-386d-3409-af2e-78857eec5cfe",
+      "quality": "normal",
+      "barcode": "190295178680",
+      "disambiguation": "",
+      "date": "2020-07-31",
+      "country": "AF",
+      "packaging": "None",
+      "media": [
+        {
+          "title": "",
+          "position": 1,
+          "id": "dbb97b9f-73db-32a0-a649-042ab1654413",
+          "track-offset": 11,
+          "track-count": 13,
+          "format": "Digital Media",
+          "format-id": "907a28d9-b3b2-3ef6-89a8-7b18d91d4794",
+          "tracks": [
+            {
+              "title": "Miami (Tim Fuchs remix)",
+              "id": "7a7caca1-8083-407f-a6d6-818f3713aa69",
+              "length": 396906,
+              "position": 12,
+              "number": "12"
+            }
+          ]
+        }
+      ],
+      "packaging-id": "119eba76-b343-3e02-a292-f0f00644bb9b",
+      "text-representation": {
+        "script": "Latn",
+        "language": "eng"
+      }
+    },
+    {
+      "disambiguation": "",
+      "date": "2020-10-09",
+      "barcode": "190295129453",
+      "media": [
+        {
+          "tracks": [
+            {
+              "title": "Miami (Tim Fuchs remix)",
+              "position": 12,
+              "number": "12",
+              "id": "098c7f83-7f68-4456-9345-1e7e5784f1f1",
+              "length": 396907
+            }
+          ],
+          "format": "Digital Media",
+          "format-id": "907a28d9-b3b2-3ef6-89a8-7b18d91d4794",
+          "track-offset": 11,
+          "track-count": 13,
+          "id": "066b816e-e974-3695-a489-7ed2ca7fce23",
+          "position": 2,
+          "title": ""
+        }
+      ],
+      "packaging-id": "119eba76-b343-3e02-a292-f0f00644bb9b",
+      "text-representation": {
+        "language": "eng",
+        "script": "Latn"
+      },
+      "country": "XW",
+      "packaging": "None",
+      "title": "Collected Reworks",
+      "status": "Official",
+      "status-id": "4e304316-386d-3409-af2e-78857eec5cfe",
+      "id": "c381e274-2382-45bc-92d4-6f9bfa65d781",
+      "quality": "normal"
+    }
+  ],
+  "video": false,
+  "disambiguation": "",
+  "title": "Miami (Tim Fuchs remix)",
+  "first-release-date": "2010-05-10"
+}

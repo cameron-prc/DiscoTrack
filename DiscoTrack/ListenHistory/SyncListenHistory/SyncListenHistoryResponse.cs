@@ -1,3 +1,3 @@
 namespace DiscoTrack.ListenHistory.SyncListenHistory;
 
-public record SyncListenHistoryResponse(int FetchedPlays, int AddedPlays, DateTimeOffset? After);
+public record SyncListenHistoryResponse(int FetchedPlays, IReadOnlyList<Play> AddedPlays, DateTimeOffset? After);

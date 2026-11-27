@@ -31,7 +31,8 @@ internal static class Extensions
 			song.Track ?? 0,
 			song.Duration,
 			artists,
-			ToMusicBrainzRecordingId(song.MusicBrainzId));
+			ToMusicBrainzRecordingId(song.MusicBrainzId),
+			ToIsrcs(song.Isrc));
 	}
 
 	private static MusicBrainzArtistId? ToMusicBrainzArtistId(string? value)
@@ -42,6 +43,11 @@ internal static class Extensions
 	private static MusicBrainzReleaseId? ToMusicBrainzReleaseId(string? value)
 	{
 		return string.IsNullOrEmpty(value) ? null : new MusicBrainzReleaseId(value);
+	}
+
+	private static IReadOnlyList<Isrc> ToIsrcs(IReadOnlyList<string>? values)
+	{
+		return (values ?? []).Where(value => !string.IsNullOrWhiteSpace(value)).Select(value => new Isrc(value)).Distinct().ToList();
 	}
 
 	private static MusicBrainzRecordingId? ToMusicBrainzRecordingId(string? value)

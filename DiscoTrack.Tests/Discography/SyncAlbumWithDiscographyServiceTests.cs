@@ -515,16 +515,29 @@ public class SyncAlbumWithDiscographyServiceTests
 	}
 
 	[Fact]
-	public async Task Leaves_the_tracks_of_an_untracked_album_alone()
+	public async Task Does_not_ask_for_the_tracks_of_an_untracked_album_that_came_without_them()
+	{
+		_album.ExternalIds = [ReleaseGroupId];
+
+		var response = (await Sync().Run(_album.Id, CancellationToken.None)).GetRight;
+
+		Assert.Null(response.Tracks);
+		Assert.Equal([nameof(ICatalogue.SaveAlbum)], _saves);
+		_source.Verify(source => source.GetAlbumTracks(It.IsAny<ExternalId>(), It.IsAny<CancellationToken>()), Times.Never);
+		_catalogue.Verify(catalogue => catalogue.GetAlbumTracks(It.IsAny<AlbumId>(), It.IsAny<CancellationToken>()), Times.Never);
+	}
+
+	[Fact]
+	public async Task Saves_the_tracks_that_came_with_an_untracked_albums_release()
 	{
 		_resolver.Setup(resolver => resolver.Resolve(_album, It.IsAny<CancellationToken>()))
 			.ReturnsAsync(Discography(DiscographyTool) with { Tracks = [Listed(1, "The Grudge", "rec-grudge")] });
 
 		var response = (await Sync().Run(_album.Id, CancellationToken.None)).GetRight;
 
-		Assert.Null(response.Tracks);
-		Assert.Equal([nameof(ICatalogue.SaveAlbum)], _saves);
-		_catalogue.Verify(catalogue => catalogue.GetAlbumTracks(It.IsAny<AlbumId>(), It.IsAny<CancellationToken>()), Times.Never);
+		Assert.False(response.Album.Tracked);
+		Assert.Equal("The Grudge", Assert.Single(_savedTracks).Title);
+		Assert.Equal([nameof(ICatalogue.SaveAlbum), nameof(ICatalogue.SaveAlbumTracks)], _saves);
 	}
 
 	[Fact]
@@ -557,6 +570,47 @@ public class SyncAlbumWithDiscographyServiceTests
 		Assert.Equal("The Grudge", track.Title);
 		Assert.Equal(515000, track.DurationMs);
 		Assert.Same(_tool, Assert.Single(track.Artists).Artist);
+	}
+
+	[Fact]
+	public async Task Gives_a_track_the_isrcs_of_its_recording_and_keeps_the_ones_it_already_holds()
+	{
+		var owned = Owned(1, "The Grudge", "song-grudge");
+		owned.ExternalIds = [new SubsonicId("song-grudge"), new Isrc("USVR10100199")];
+		KnownTracks(owned);
+		Tracklist(Listed(1, "The Grudge", "rec-grudge") with { Isrcs = [new Isrc("USVR10100101"), new Isrc("USVR10100199")] });
+
+		await Sync().Run(_album.Id, CancellationToken.None);
+
+		var track = Assert.Single(_savedTracks);
+		Assert.Equal([new SubsonicId("song-grudge"), new Isrc("USVR10100199"), new MusicBrainzRecordingId("rec-grudge"), new Isrc("USVR10100101")], track.ExternalIds);
+	}
+
+	[Fact]
+	public async Task Matches_a_track_by_isrc_wherever_it_sits()
+	{
+		var played = new Track { AlbumId = _album.Id, Title = "The Grudge - 2019 Remaster", DiscNumber = 2, Position = 4, ExternalIds = [new SpotifyTrackId("sp-grudge"), new Isrc("USVR10100101")] };
+		KnownTracks(played);
+		Tracklist(Listed(1, "The Grudge", "rec-grudge") with { Isrcs = [new Isrc("USVR10100101")] });
+
+		await Sync().Run(_album.Id, CancellationToken.None);
+
+		var track = Assert.Single(_savedTracks);
+		Assert.Same(played, track);
+		Assert.Equal((1, 1, "The Grudge"), (track.DiscNumber, track.Position, track.Title));
+		Assert.Contains(new MusicBrainzRecordingId("rec-grudge"), track.ExternalIds);
+	}
+
+	[Fact]
+	public async Task Drops_a_track_the_discography_no_longer_lists_when_it_holds_only_discography_ids()
+	{
+		var gone = new Track { AlbumId = _album.Id, Title = "Hidden Track", DiscNumber = 1, Position = 14, ExternalIds = [new MusicBrainzRecordingId("rec-hidden"), new Isrc("USVR10100114")] };
+		KnownTracks(gone);
+		Tracklist(Listed(1, "The Grudge", "rec-grudge"));
+
+		await Sync().Run(_album.Id, CancellationToken.None);
+
+		Assert.Equal("The Grudge", Assert.Single(_savedTracks).Title);
 	}
 
 	[Fact]

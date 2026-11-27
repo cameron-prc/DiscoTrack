@@ -13,7 +13,7 @@ public class SyncListenHistoryService(IListenHistorySource source, IListenHistor
 	{
 		DateTimeOffset? latestPlayedAt;
 		IReadOnlyList<Play> plays;
-		int addedPlays;
+		IReadOnlyList<Play> addedPlays;
 
 		try
 		{

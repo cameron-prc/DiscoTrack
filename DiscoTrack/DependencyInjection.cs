@@ -4,6 +4,7 @@ using DiscoTrack.Discography.SyncArtistWithDiscography;
 using DiscoTrack.Jobs;
 using DiscoTrack.Jobs.JobHandlers;
 using DiscoTrack.Library.SyncLibrary;
+using DiscoTrack.ListenHistory.ResolvePlays;
 using DiscoTrack.ListenHistory.SyncListenHistory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -25,6 +26,7 @@ public static class DependencyInjection
 		services.AddScoped<ISyncArtistWithDiscographyJobHandler, SyncArtistWithDiscographyJobHandler>();
 		services.AddScoped<ISyncAllArtistsWithDiscographyJobHandler, SyncAllArtistsWithDiscographyJobHandler>();
 		services.AddScoped<ISyncListenHistoryService, SyncListenHistoryService>();
+		services.AddScoped<IResolvePlaysService, ResolvePlaysService>();
 		services.AddScoped<ISyncListenHistoryJobHandler, SyncListenHistoryJobHandler>();
 		services.AddScoped<IJobRunner, JobRunner>();
 		return services;

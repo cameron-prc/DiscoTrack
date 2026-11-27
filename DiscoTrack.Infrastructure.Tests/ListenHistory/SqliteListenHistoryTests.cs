@@ -44,6 +44,8 @@ public sealed class SqliteListenHistoryTests : IDisposable
 			TrackTitle = "Genesis",
 			Isrc = "GBAHT1000182",
 			DurationMs = 69000,
+			DiscNumber = 2,
+			TrackNumber = 12,
 			Artists = [new PlayArtist(new SpotifyArtistId("art-pendulum"), "Pendulum"), new PlayArtist(new SpotifyArtistId("art-guest"), "Guest")],
 			AlbumId = new SpotifyAlbumId("alb-immersion"),
 			AlbumTitle = "Immersion",
@@ -51,7 +53,7 @@ public sealed class SqliteListenHistoryTests : IDisposable
 
 		var added = await _history.AddPlays([play], CancellationToken.None);
 
-		Assert.Equal(1, added);
+		Assert.Same(play, Assert.Single(added));
 		var stored = Assert.Single(await _history.GetPlays(0, 50, CancellationToken.None));
 		Assert.Equal(play.Id, stored.Id);
 		Assert.Equal(Morning, stored.PlayedAt);
@@ -59,6 +61,7 @@ public sealed class SqliteListenHistoryTests : IDisposable
 		Assert.Equal("Genesis", stored.TrackTitle);
 		Assert.Equal("GBAHT1000182", stored.Isrc);
 		Assert.Equal(69000, stored.DurationMs);
+		Assert.Equal((2, 12), (stored.DiscNumber, stored.TrackNumber));
 		Assert.Equal(play.Artists, stored.Artists);
 		Assert.Equal(new SpotifyAlbumId("alb-immersion"), stored.AlbumId);
 		Assert.Equal("Immersion", stored.AlbumTitle);
@@ -74,6 +77,8 @@ public sealed class SqliteListenHistoryTests : IDisposable
 		Assert.Null(stored.AlbumTitle);
 		Assert.Null(stored.Isrc);
 		Assert.Null(stored.DurationMs);
+		Assert.Null(stored.DiscNumber);
+		Assert.Null(stored.TrackNumber);
 		Assert.Empty(stored.Artists);
 	}
 
@@ -84,7 +89,7 @@ public sealed class SqliteListenHistoryTests : IDisposable
 
 		var added = await _history.AddPlays([Play("trk-1", Morning), Play("trk-2", Morning.AddMinutes(4))], CancellationToken.None);
 
-		Assert.Equal(0, added);
+		Assert.Empty(added);
 		Assert.Equal(2, await _history.CountPlays(CancellationToken.None));
 		Assert.All(await _history.GetPlays(0, 50, CancellationToken.None), play => Assert.Single(play.Artists));
 	}
@@ -96,7 +101,7 @@ public sealed class SqliteListenHistoryTests : IDisposable
 
 		var added = await _history.AddPlays([Play("trk-1", Morning), Play("trk-2", Morning.AddMinutes(4))], CancellationToken.None);
 
-		Assert.Equal(1, added);
+		Assert.Equal("trk-2", Assert.Single(added).TrackTitle);
 		Assert.Equal(2, await _history.CountPlays(CancellationToken.None));
 	}
 
@@ -107,7 +112,7 @@ public sealed class SqliteListenHistoryTests : IDisposable
 
 		var added = await _history.AddPlays([Play("trk-1", Morning.ToOffset(TimeSpan.FromHours(12)))], CancellationToken.None);
 
-		Assert.Equal(0, added);
+		Assert.Empty(added);
 	}
 
 	[Fact]
@@ -117,7 +122,7 @@ public sealed class SqliteListenHistoryTests : IDisposable
 			[Play("trk-1", Morning), Play("trk-1", Morning.AddMinutes(4)), Play("trk-2", Morning)],
 			CancellationToken.None);
 
-		Assert.Equal(3, added);
+		Assert.Equal(3, added.Count);
 	}
 
 	[Fact]

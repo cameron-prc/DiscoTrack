@@ -24,6 +24,11 @@ public class Track
 			.ToList();
 	}
 
+	public void AddExternalIds(IEnumerable<ExternalId> externalIds)
+	{
+		ExternalIds = ExternalIds.Union(externalIds).ToList();
+	}
+
 	public void RemoveExternalIds(Provider provider)
 	{
 		ExternalIds = ExternalIds

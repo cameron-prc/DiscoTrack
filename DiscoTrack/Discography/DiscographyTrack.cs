@@ -8,4 +8,5 @@ public record DiscographyTrack(
 	int DiscNumber,
 	int Position,
 	int? LengthMs,
-	IReadOnlyList<DiscographyArtist> Artists);
+	IReadOnlyList<DiscographyArtist> Artists,
+	IReadOnlyList<Isrc>? Isrcs = null);

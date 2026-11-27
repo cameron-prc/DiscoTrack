@@ -16,6 +16,7 @@ public partial class MusicBrainzDiscographySource(IMusicBrainzClient client, IOp
 	private readonly int _pageSize = options.Value.PageSize;
 	private readonly int _searchSize = options.Value.SearchSize;
 	private readonly int _maxReleaseGroupPages = options.Value.MaxReleaseGroupPages;
+	private readonly int _maxRecordingsPerIsrc = options.Value.MaxRecordingsPerIsrc;
 
 	public Provider ReleaseProvider
 	{
@@ -100,6 +101,39 @@ public partial class MusicBrainzDiscographySource(IMusicBrainzClient client, IOp
 			.FirstOrDefault();
 
 		return chosen is null ? [] : await GetAlbumTracks(new MusicBrainzReleaseId(chosen.Id), ct);
+	}
+
+	public async Task<IReadOnlyList<ExternalId>> FindLinkedReleases(ExternalId albumId, CancellationToken ct)
+	{
+		if (albumId is not SpotifyAlbumId spotifyAlbumId)
+		{
+			return [];
+		}
+
+		var releases = await client.GetReleasesByUrl($"https://open.spotify.com/album/{spotifyAlbumId.Value}", ct);
+
+		return releases
+			.Select(release => (ExternalId)new MusicBrainzReleaseId(release.Id))
+			.Distinct()
+			.ToList();
+	}
+
+	public async Task<IReadOnlyList<DiscographyRecording>> FindRecordings(string isrc, CancellationToken ct)
+	{
+		var recordings = new List<DiscographyRecording>();
+
+		foreach (var found in (await client.GetRecordingsByIsrc(isrc.ToUpperInvariant(), ct)).Take(_maxRecordingsPerIsrc))
+		{
+			var recording = await client.GetRecording(found.Id, ct);
+
+			recordings.Add(new DiscographyRecording(
+				new MusicBrainzRecordingId(found.Id),
+				(recording?.Releases ?? [])
+					.Select(release => new DiscographyRelease(new MusicBrainzReleaseId(release.Id), release.Title, release.Status == OfficialStatus, release.Date, release.TrackCount()))
+					.ToList()));
+		}
+
+		return recordings;
 	}
 
 	public Task<DiscographyArtist?> GetArtist(ExternalId id, CancellationToken ct)

@@ -457,6 +457,22 @@ public class SyncLibraryTests
 	}
 
 	[Fact]
+	public async Task Gives_the_library_id_to_a_catalogue_track_holding_the_same_isrc_and_adds_the_isrcs_it_lacks()
+	{
+		var (album, played) = await OwnedAlbumWithTrack(new Track
+		{
+			AlbumId = default, Title = "Tiny Monsters - Remastered", DiscNumber = 1, Position = 9, ExternalIds = [new SpotifyTrackId("sp-tiny"), new Isrc("USPU11100003")],
+		});
+		_source.Tracks.Add(Track("song-tiny", "alb-parole", 1, 3, "Tiny Monsters", Puscifer) with { Isrcs = [new Isrc("uspu11100003"), new Isrc("USPU11100099")] });
+
+		await Sync().Run(CancellationToken.None);
+
+		var track = Assert.Single(_catalogue.Tracks[album.Id]);
+		Assert.Equal(played.Id, track.Id);
+		Assert.Equal([new SpotifyTrackId("sp-tiny"), new Isrc("USPU11100003"), new Isrc("USPU11100099"), new SubsonicId("song-tiny")], track.ExternalIds);
+	}
+
+	[Fact]
 	public async Task Gives_the_library_id_to_a_catalogue_track_holding_the_same_recording_id()
 	{
 		var (album, missing) = await OwnedAlbumWithTrack(new Track

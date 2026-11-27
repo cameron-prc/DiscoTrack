@@ -9,6 +9,10 @@ public class MusicBrainzClientTests
 	private const string ToolId = "66fc5bf8-daa4-4241-b378-9bc9077939d2";
 	private const string LateralusReleaseId = "ea5777f4-867b-4ce2-bfa9-8f3a2239812d";
 	private const string LateralusReleaseGroupId = "02f79295-21e1-34cc-82f2-63219eec4f0a";
+	private const string MiamiRemixRecordingId = "7b6a8e9e-6094-402d-b939-40fdef1be95a";
+	private const string MiamiRemixIsrc = "GBAHT1000182";
+	private const string CollectedReworksReleaseId = "f6055c04-842b-4917-8f71-2211526ffa8c";
+	private const string CollectedReworksSpotifyUrl = "https://open.spotify.com/album/34gxHZG9TvQgrRDGpR8Y6c";
 
 	private readonly StubHttpHandler _http = new();
 
@@ -26,7 +30,7 @@ public class MusicBrainzClientTests
 
 		var request = _http.Requests.Single().RequestUri!;
 		Assert.Equal($"/ws/2/release/{LateralusReleaseId}", request.AbsolutePath);
-		Assert.Equal("?inc=release-groups+artist-credits+recordings&fmt=json", request.Query);
+		Assert.Equal("?inc=release-groups+artist-credits+recordings+isrcs&fmt=json", request.Query);
 	}
 
 	[Fact]
@@ -64,6 +68,8 @@ public class MusicBrainzClientTests
 		Assert.Equal(516000, grudge.Length);
 		Assert.Equal("f2d2a5f1-0000-4000-8000-00000000000a", grudge.Recording.Id);
 		Assert.Equal(515000, grudge.Recording.Length);
+		Assert.Equal(["USVR10100101"], grudge.Recording.Isrcs);
+		Assert.Empty(medium.Tracks[1].Recording!.Isrcs!);
 		Assert.Equal(ToolId, Assert.Single(grudge.Recording.ArtistCredit!).Artist.Id);
 		Assert.Null(medium.Tracks[1].Length);
 		Assert.Null(medium.Tracks[1].Recording.ArtistCredit);
@@ -113,6 +119,108 @@ public class MusicBrainzClientTests
 		var releaseGroup = await Client().GetReleaseGroup(LateralusReleaseGroupId, CancellationToken.None);
 
 		Assert.Null(releaseGroup);
+	}
+
+	[Fact]
+	public async Task GetRecording_requests_the_recording_with_its_releases_and_their_media()
+	{
+		_http.WhenPathContains("recording/", Fixtures.Read("musicbrainz/recording-releases.json"));
+
+		await Client().GetRecording(MiamiRemixRecordingId, CancellationToken.None);
+
+		var request = _http.Requests.Single().RequestUri!;
+		Assert.Equal($"/ws/2/recording/{MiamiRemixRecordingId}", request.AbsolutePath);
+		Assert.Equal("?inc=releases+media&fmt=json", request.Query);
+	}
+
+	[Fact]
+	public async Task GetRecording_returns_the_releases_the_recording_is_on_as_deserialised()
+	{
+		_http.WhenPathContains("recording/", Fixtures.Read("musicbrainz/recording-releases.json"));
+
+		var recording = await Client().GetRecording(MiamiRemixRecordingId, CancellationToken.None);
+
+		Assert.NotNull(recording);
+		Assert.Equal(MiamiRemixRecordingId, recording.Id);
+		Assert.Equal(4, recording.Releases!.Count);
+		var release = recording.Releases.Single(release => release.Id == CollectedReworksReleaseId);
+		Assert.Equal("Collected Reworks Vol. 2", release.Title);
+		Assert.Equal("Official", release.Status);
+		Assert.Equal("2020-07-31", release.Date);
+		Assert.Equal(13, Assert.Single(release.Media!).TrackCount);
+	}
+
+	[Fact]
+	public async Task GetRecording_returns_null_when_the_recording_is_not_found()
+	{
+		_http.WhenPathContains("recording/", Fixtures.Read("musicbrainz/error-not-found.json"), HttpStatusCode.NotFound);
+
+		Assert.Null(await Client().GetRecording(MiamiRemixRecordingId, CancellationToken.None));
+	}
+
+	[Fact]
+	public async Task GetRecordingsByIsrc_requests_the_isrc()
+	{
+		_http.WhenPathContains("isrc/", Fixtures.Read("musicbrainz/isrc.json"));
+
+		await Client().GetRecordingsByIsrc(MiamiRemixIsrc, CancellationToken.None);
+
+		var request = _http.Requests.Single().RequestUri!;
+		Assert.Equal($"/ws/2/isrc/{MiamiRemixIsrc}", request.AbsolutePath);
+		Assert.Equal("?fmt=json", request.Query);
+	}
+
+	[Fact]
+	public async Task GetRecordingsByIsrc_returns_the_recordings_as_deserialised()
+	{
+		_http.WhenPathContains("isrc/", Fixtures.Read("musicbrainz/isrc.json"));
+
+		var recordings = await Client().GetRecordingsByIsrc(MiamiRemixIsrc, CancellationToken.None);
+
+		Assert.Equal(MiamiRemixRecordingId, Assert.Single(recordings).Id);
+	}
+
+	[Fact]
+	public async Task GetRecordingsByIsrc_returns_nothing_when_the_isrc_is_not_known()
+	{
+		_http.WhenPathContains("isrc/", Fixtures.Read("musicbrainz/error-not-found.json"), HttpStatusCode.NotFound);
+
+		Assert.Empty(await Client().GetRecordingsByIsrc(MiamiRemixIsrc, CancellationToken.None));
+	}
+
+	[Fact]
+	public async Task GetReleasesByUrl_requests_the_url_with_its_release_relationships()
+	{
+		_http.WhenPathContains("url?", Fixtures.Read("musicbrainz/url-releases.json"));
+
+		await Client().GetReleasesByUrl(CollectedReworksSpotifyUrl, CancellationToken.None);
+
+		var request = _http.Requests.Single().RequestUri!;
+		Assert.Equal("/ws/2/url", request.AbsolutePath);
+		var query = HttpUtility.ParseQueryString(request.Query);
+		Assert.Equal(CollectedReworksSpotifyUrl, query["resource"]);
+		Assert.Equal("release-rels", query["inc"]);
+		Assert.Equal("json", query["fmt"]);
+	}
+
+	[Fact]
+	public async Task GetReleasesByUrl_returns_the_releases_the_url_is_linked_to()
+	{
+		_http.WhenPathContains("url?", Fixtures.Read("musicbrainz/url-releases.json"));
+
+		var releases = await Client().GetReleasesByUrl(CollectedReworksSpotifyUrl, CancellationToken.None);
+
+		var release = Assert.Single(releases);
+		Assert.Equal(CollectedReworksReleaseId, release.Id);
+		Assert.Equal("Collected Reworks Vol. 2", release.Title);
+	}
+
+	[Fact]
+	public async Task GetReleasesByUrl_returns_nothing_when_the_url_is_not_known()
+	{
+		_http.WhenPathContains("url?", Fixtures.Read("musicbrainz/error-not-found.json"), HttpStatusCode.NotFound);
+
+		Assert.Empty(await Client().GetReleasesByUrl(CollectedReworksSpotifyUrl, CancellationToken.None));
 	}
 
 	[Fact]

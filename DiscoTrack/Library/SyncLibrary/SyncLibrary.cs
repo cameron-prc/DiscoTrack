@@ -287,6 +287,7 @@ public class SyncLibrary(ICatalogue catalogue, ILibrarySource librarySource, ILo
 				tracks.Add(track);
 			}
 
+			track.AddExternalIds(libraryTrack.Isrcs ?? []);
 			libraryIds.TryAdd(track, []);
 			libraryIds[track].Add(libraryTrack.Id);
 		}

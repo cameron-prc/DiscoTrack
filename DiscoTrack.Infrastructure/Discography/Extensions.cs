@@ -23,13 +23,16 @@ internal static class Extensions
 	public static IReadOnlyList<DiscographyTrack> ToDiscographyTracks(this Release release)
 	{
 		return (release.Media ?? [])
-			.SelectMany(medium => (medium.Tracks ?? []).Select(track => new DiscographyTrack(
-				new MusicBrainzRecordingId(track.Recording.Id),
-				track.Title,
-				medium.Position,
-				track.Position,
-				track.Length ?? track.Recording.Length,
-				(track.Recording.ArtistCredit ?? []).Select(credit => credit.ToDiscographyArtist()).ToList())))
+			.SelectMany(medium => (medium.Tracks ?? [])
+				.Where(track => track.Recording is not null)
+				.Select(track => new DiscographyTrack(
+					new MusicBrainzRecordingId(track.Recording!.Id),
+					track.Title,
+					medium.Position,
+					track.Position,
+					track.Length ?? track.Recording.Length,
+					(track.Recording.ArtistCredit ?? []).Select(credit => credit.ToDiscographyArtist()).ToList(),
+					(track.Recording.Isrcs ?? []).Where(isrc => !string.IsNullOrWhiteSpace(isrc)).Select(isrc => new Isrc(isrc)).Distinct().ToList())))
 			.ToList();
 	}
 

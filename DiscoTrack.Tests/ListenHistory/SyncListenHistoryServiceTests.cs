@@ -17,6 +17,7 @@ public class SyncListenHistoryServiceTests
 	{
 		_source.SetupGet(source => source.TrackProvider).Returns(Provider.SpotifyTrack);
 		_source.Setup(source => source.GetPlays(It.IsAny<DateTimeOffset?>(), It.IsAny<CancellationToken>())).ReturnsAsync([]);
+		_listenHistory.Setup(history => history.AddPlays(It.IsAny<IReadOnlyList<Play>>(), It.IsAny<CancellationToken>())).ReturnsAsync([]);
 	}
 
 	private SyncListenHistoryService Sync()
@@ -51,12 +52,12 @@ public class SyncListenHistoryServiceTests
 	{
 		IReadOnlyList<Play> plays = [Play("trk-1", Latest.AddMinutes(1)), Play("trk-2", Latest.AddMinutes(5))];
 		_source.Setup(source => source.GetPlays(It.IsAny<DateTimeOffset?>(), It.IsAny<CancellationToken>())).ReturnsAsync(plays);
-		_listenHistory.Setup(history => history.AddPlays(plays, It.IsAny<CancellationToken>())).ReturnsAsync(1);
+		_listenHistory.Setup(history => history.AddPlays(plays, It.IsAny<CancellationToken>())).ReturnsAsync([plays[1]]);
 
 		var response = (await Sync().Run(CancellationToken.None)).GetRight;
 
 		Assert.Equal(2, response.FetchedPlays);
-		Assert.Equal(1, response.AddedPlays);
+		Assert.Equal([plays[1]], response.AddedPlays);
 		_listenHistory.Verify(history => history.AddPlays(plays, It.IsAny<CancellationToken>()), Times.Once);
 	}
 

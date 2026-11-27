@@ -12,4 +12,5 @@ public sealed record Child
 	public string? Artist { get; init; }
 	public IReadOnlyList<ArtistID3>? Artists { get; init; }
 	public string? MusicBrainzId { get; init; }
+	public IReadOnlyList<string>? Isrc { get; init; }
 }

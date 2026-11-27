@@ -53,7 +53,8 @@ public class SyncAlbumWithDiscographyService(IDiscographySource source, IDiscogr
 				.FirstOrDefault(knownAlbum => knownAlbum.Id != album.Id && knownAlbum.ExternalIds.Contains(discographyAlbum.ReleaseGroupId));
 		var tracked = album.Tracked || absorbedAlbum is { Tracked: true };
 
-		if (tracked)
+		// An untracked album only gets tracks when they came with the album, which costs no further request
+		if (tracked || discographyAlbum.Tracks is not null)
 		{
 			try
 			{
@@ -67,7 +68,7 @@ public class SyncAlbumWithDiscographyService(IDiscographySource source, IDiscogr
 			}
 		}
 
-		if (tracked || absorbedAlbum is not null)
+		if (discographyTracks is not null || absorbedAlbum is not null)
 		{
 			try
 			{
@@ -244,12 +245,14 @@ public class SyncAlbumWithDiscographyService(IDiscographySource source, IDiscogr
 
 		foreach (var discographyTrack in discographyTracks)
 		{
-			var track = unlistedTracks.FindMatch([discographyTrack.RecordingId], discographyTrack.DiscNumber, discographyTrack.Position, discographyTrack.Title, anyRecording: true)
+			var isrcs = discographyTrack.Isrcs ?? [];
+			var track = unlistedTracks.FindMatch([discographyTrack.RecordingId, .. isrcs], discographyTrack.DiscNumber, discographyTrack.Position, discographyTrack.Title, anyRecording: true)
 					?? new Track { AlbumId = albumId, Title = discographyTrack.Title, DiscNumber = discographyTrack.DiscNumber, Position = discographyTrack.Position };
 
 			unlistedTracks.Remove(track);
 
 			track.SetExternalIds([discographyTrack.RecordingId]);
+			track.AddExternalIds(isrcs);
 			track.Title = discographyTrack.Title;
 			track.DiscNumber = discographyTrack.DiscNumber;
 			track.Position = discographyTrack.Position;
@@ -265,7 +268,7 @@ public class SyncAlbumWithDiscographyService(IDiscographySource source, IDiscogr
 		}
 
 		return tracks
-				.Concat(unlistedTracks.Where(track => track.ExternalIds.Any(externalId => externalId.Provider != source.RecordingProvider)))
+				.Concat(unlistedTracks.Where(track => track.ExternalIds.Any(externalId => externalId.Provider != source.RecordingProvider && externalId.Provider != Provider.Isrc)))
 				.ToList();
 	}
 

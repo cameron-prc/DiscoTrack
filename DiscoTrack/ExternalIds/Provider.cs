@@ -10,4 +10,5 @@ public enum Provider
 	SpotifyArtist,
 	SpotifyAlbum,
 	SpotifyTrack,
+	Isrc,
 }

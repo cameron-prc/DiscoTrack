@@ -21,6 +21,35 @@ public class TrackMatchingTests
 	}
 
 	[Fact]
+	public void FindMatch_matches_a_track_sharing_an_isrc_wherever_it_sits()
+	{
+		var samePlace = Track(Album, 1, 1, "The Grudge");
+		var sameIsrc = Track(Album, 1, 9, "The Grudge (live)", new Isrc("USVR10100101"));
+
+		var match = new[] { samePlace, sameIsrc }.FindMatch([new SubsonicId("song-grudge"), new Isrc("usvr10100101")], 1, 1, "The Grudge");
+
+		Assert.Same(sameIsrc, match);
+	}
+
+	[Fact]
+	public void FindMatch_prefers_a_track_sharing_a_providers_own_id_over_one_sharing_an_isrc()
+	{
+		var sameIsrc = Track(Album, 1, 1, "The Grudge", new Isrc("USVR10100101"));
+		var sameRecording = Track(Album, 1, 9, "The Grudge (live)", new MusicBrainzRecordingId("rec-grudge"));
+
+		var match = new[] { sameIsrc, sameRecording }.FindMatch([new Isrc("USVR10100101"), new MusicBrainzRecordingId("rec-grudge")], 1, 1, "The Grudge");
+
+		Assert.Same(sameRecording, match);
+	}
+
+	[Fact]
+	public void An_isrc_is_the_same_in_any_letter_case()
+	{
+		Assert.Equal(new Isrc("USVR10100101"), new Isrc("usvr10100101"));
+		Assert.Equal("USVR10100101", new Isrc("usvr10100101").Value);
+	}
+
+	[Fact]
 	public void FindMatch_matches_the_same_disc_and_position_when_the_titles_differ_only_in_case_and_punctuation()
 	{
 		var track = Track(Album, 1, 1, "The Grudge", new MusicBrainzRecordingId("rec-grudge"));

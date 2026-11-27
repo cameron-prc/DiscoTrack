@@ -23,9 +23,9 @@ public class MusicBrainzDiscographySourceTests
 
 	private readonly Mock<IMusicBrainzClient> _client = new();
 
-	private MusicBrainzDiscographySource Source(int pageSize = 100, int searchSize = 25, int maxReleaseGroupPages = 10)
+	private MusicBrainzDiscographySource Source(int pageSize = 100, int searchSize = 25, int maxReleaseGroupPages = 10, int maxRecordingsPerIsrc = 3)
 	{
-		return new(_client.Object, TestMusicBrainzOptions.Create(pageSize, searchSize, maxReleaseGroupPages));
+		return new(_client.Object, TestMusicBrainzOptions.Create(pageSize, searchSize, maxReleaseGroupPages, maxRecordingsPerIsrc));
 	}
 
 	[Fact]
@@ -77,6 +77,28 @@ public class MusicBrainzDiscographySourceTests
 			[new DiscographyArtist(new MusicBrainzArtistId("mb-tool"), "Tool", "American rock band"), new DiscographyArtist(new MusicBrainzArtistId("mb-puscifer"), "Puscifer", null)],
 			album.Tracks![1].Artists);
 		Assert.Empty(album.Tracks[2].Artists);
+	}
+
+	[Fact]
+	public async Task GetAlbum_by_release_returns_each_tracks_isrcs()
+	{
+		_client.Setup(client => client.GetRelease("rel-lateralus-cd", It.IsAny<CancellationToken>()))
+			.ReturnsAsync(Release("rel-lateralus-cd") with
+			{
+				ReleaseGroup = Lateralus,
+				Media =
+				[
+					Medium(
+						1,
+						new Track { Position = 1, Title = "The Grudge", Recording = new Recording { Id = "rec-grudge", Isrcs = ["usvr10100101", "USVR10100101", "", "USVR10100199"] } },
+						Track(2, "Schism", "rec-schism", null)),
+				],
+			});
+
+		var album = await Source().GetAlbum(new MusicBrainzReleaseId("rel-lateralus-cd"), CancellationToken.None);
+
+		Assert.Equal([new Isrc("USVR10100101"), new Isrc("USVR10100199")], album!.Tracks![0].Isrcs);
+		Assert.Empty(album.Tracks[1].Isrcs!);
 	}
 
 	[Fact]
@@ -151,6 +173,93 @@ public class MusicBrainzDiscographySourceTests
 
 		Assert.Empty(tracks);
 		_client.Verify(client => client.GetRelease(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+	}
+
+	[Fact]
+	public async Task FindLinkedReleases_looks_up_the_spotify_album_address()
+	{
+		_client.Setup(client => client.GetReleasesByUrl("https://open.spotify.com/album/sp-lateralus", It.IsAny<CancellationToken>()))
+			.ReturnsAsync([Release("rel-lateralus-digital"), Release("rel-lateralus-cd"), Release("rel-lateralus-digital")]);
+
+		var releases = await Source().FindLinkedReleases(new SpotifyAlbumId("sp-lateralus"), CancellationToken.None);
+
+		Assert.Equal([new MusicBrainzReleaseId("rel-lateralus-digital"), new MusicBrainzReleaseId("rel-lateralus-cd")], releases);
+	}
+
+	[Fact]
+	public async Task FindLinkedReleases_returns_nothing_for_an_id_it_has_no_address_for()
+	{
+		var releases = await Source().FindLinkedReleases(new MusicBrainzReleaseId("rel-lateralus-cd"), CancellationToken.None);
+
+		Assert.Empty(releases);
+		_client.Verify(client => client.GetReleasesByUrl(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+	}
+
+	[Fact]
+	public async Task FindRecordings_returns_each_recording_of_the_isrc_with_the_releases_it_is_on()
+	{
+		_client.Setup(client => client.GetRecordingsByIsrc("USVR10100102", It.IsAny<CancellationToken>()))
+			.ReturnsAsync([new Recording { Id = "rec-schism" }, new Recording { Id = "rec-schism-live" }]);
+		_client.Setup(client => client.GetRecording("rec-schism", It.IsAny<CancellationToken>()))
+			.ReturnsAsync(new Recording
+			{
+				Id = "rec-schism",
+				Releases =
+				[
+					Browsed("rel-lateralus-cd", "Official", "2001-05-14", 13),
+					new Release
+					{
+						Id = "rel-lateralus-vinyl", Title = "Lateralus", Status = "Bootleg",
+						Media = [new Medium { Position = 1, TrackCount = 7 }, new Medium { Position = 2, TrackCount = 6 }],
+					},
+				],
+			});
+		_client.Setup(client => client.GetRecording("rec-schism-live", It.IsAny<CancellationToken>())).ReturnsAsync((Recording?)null);
+
+		var recordings = await Source().FindRecordings("USVR10100102", CancellationToken.None);
+
+		Assert.Equal(2, recordings.Count);
+		Assert.Equal(new MusicBrainzRecordingId("rec-schism"), recordings[0].RecordingId);
+		Assert.Equal(
+			[
+				new DiscographyRelease(new MusicBrainzReleaseId("rel-lateralus-cd"), "Lateralus", true, "2001-05-14", 13),
+				new DiscographyRelease(new MusicBrainzReleaseId("rel-lateralus-vinyl"), "Lateralus", false, null, 13),
+			],
+			recordings[0].Releases);
+		Assert.Equal(new MusicBrainzRecordingId("rec-schism-live"), recordings[1].RecordingId);
+		Assert.Empty(recordings[1].Releases);
+	}
+
+	[Fact]
+	public async Task FindRecordings_looks_up_the_isrc_in_upper_case()
+	{
+		_client.Setup(client => client.GetRecordingsByIsrc("USVR10100102", It.IsAny<CancellationToken>())).ReturnsAsync([new Recording { Id = "rec-schism" }]);
+		_client.Setup(client => client.GetRecording("rec-schism", It.IsAny<CancellationToken>())).ReturnsAsync((Recording?)null);
+
+		var recordings = await Source().FindRecordings("usvr10100102", CancellationToken.None);
+
+		Assert.Single(recordings);
+	}
+
+	[Fact]
+	public async Task FindRecordings_reads_no_more_recordings_than_the_limit()
+	{
+		_client.Setup(client => client.GetRecordingsByIsrc("USVR10100102", It.IsAny<CancellationToken>()))
+			.ReturnsAsync([new Recording { Id = "rec-1" }, new Recording { Id = "rec-2" }, new Recording { Id = "rec-3" }]);
+		_client.Setup(client => client.GetRecording(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync((Recording?)null);
+
+		var recordings = await Source(maxRecordingsPerIsrc: 2).FindRecordings("USVR10100102", CancellationToken.None);
+
+		Assert.Equal([new MusicBrainzRecordingId("rec-1"), new MusicBrainzRecordingId("rec-2")], recordings.Select(recording => recording.RecordingId));
+		_client.Verify(client => client.GetRecording("rec-3", It.IsAny<CancellationToken>()), Times.Never);
+	}
+
+	[Fact]
+	public async Task FindRecordings_returns_nothing_when_the_isrc_is_not_known()
+	{
+		_client.Setup(client => client.GetRecordingsByIsrc("USVR10100102", It.IsAny<CancellationToken>())).ReturnsAsync([]);
+
+		Assert.Empty(await Source().FindRecordings("USVR10100102", CancellationToken.None));
 	}
 
 	private void SetupReleases(params Release[] releases)

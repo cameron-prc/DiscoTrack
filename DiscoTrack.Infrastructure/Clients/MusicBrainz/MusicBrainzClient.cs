@@ -17,7 +17,7 @@ public class MusicBrainzClient(HttpClient http) : IMusicBrainzClient
 
 	public Task<Release?> GetRelease(string id, CancellationToken ct)
 	{
-		return Get<Release>($"{MusicBrainzRoutes.Release}/{Uri.EscapeDataString(id)}?inc=release-groups+artist-credits+recordings&fmt={JsonFormat}", ct);
+		return Get<Release>($"{MusicBrainzRoutes.Release}/{Uri.EscapeDataString(id)}?inc=release-groups+artist-credits+recordings+isrcs&fmt={JsonFormat}", ct);
 	}
 
 	public Task<ReleaseGroup?> GetReleaseGroup(string id, CancellationToken ct)
@@ -28,6 +28,28 @@ public class MusicBrainzClient(HttpClient http) : IMusicBrainzClient
 	public Task<Artist?> GetArtist(string id, CancellationToken ct)
 	{
 		return Get<Artist>($"{MusicBrainzRoutes.Artist}/{Uri.EscapeDataString(id)}?fmt={JsonFormat}", ct);
+	}
+
+	public Task<Recording?> GetRecording(string id, CancellationToken ct)
+	{
+		return Get<Recording>($"{MusicBrainzRoutes.Recording}/{Uri.EscapeDataString(id)}?inc=releases+media&fmt={JsonFormat}", ct);
+	}
+
+	public async Task<IReadOnlyList<Recording>> GetRecordingsByIsrc(string isrc, CancellationToken ct)
+	{
+		var response = await Get<IsrcResponse>($"{MusicBrainzRoutes.Isrc}/{Uri.EscapeDataString(isrc)}?fmt={JsonFormat}", ct);
+
+		return response?.Recordings ?? [];
+	}
+
+	public async Task<IReadOnlyList<Release>> GetReleasesByUrl(string url, CancellationToken ct)
+	{
+		var response = await Get<UrlResponse>($"{MusicBrainzRoutes.Url}?resource={Uri.EscapeDataString(url)}&inc=release-rels&fmt={JsonFormat}", ct);
+
+		return (response?.Relations ?? [])
+			.Select(relation => relation.Release)
+			.OfType<Release>()
+			.ToList();
 	}
 
 	public async Task<IReadOnlyList<Release>> BrowseReleases(string releaseGroupId, int limit, int offset, CancellationToken ct)

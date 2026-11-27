@@ -10,10 +10,11 @@ public record LibraryTrack(
 	int TrackNumber,
 	int? DurationSeconds,
 	IReadOnlyList<LibraryArtist> Artists,
-	MusicBrainzRecordingId? MusicBrainzId = null)
+	MusicBrainzRecordingId? MusicBrainzId = null,
+	IReadOnlyList<Isrc>? Isrcs = null)
 {
 	public IReadOnlyList<ExternalId> ExternalIds
-		=> new ExternalId?[] { Id, MusicBrainzId }.OfType<ExternalId>().ToList();
+		=> new ExternalId?[] { Id, MusicBrainzId }.OfType<ExternalId>().Concat(Isrcs ?? []).ToList();
 
 	public override string ToString()
 	{
